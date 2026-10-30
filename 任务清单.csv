@@ -1,0 +1,25 @@
+里程碑编号,里程碑名称,任务编号,模块分类,任务标题,详细内容与验收标准,优先级,状态,责任端
+M0,项目骨架与基础设施基线,T0.1,顶层规范,顶层工程目录规范初始化,"以当前工作区 d:/AIAPP/Tars/ 为根目录，建立 backend/、frontend/、storage/files/ 目录结构，编写 .env.example 与本地 .env（配置 DB_HOST=127.0.0.1, DB_PORT=3306, DB_USER=root, DB_PASSWORD=Zhang19830310, DB_NAME=sqm, STORAGE_ROOT_PATH=../storage）",P0,已完成,全栈
+M0,项目骨架与基础设施基线,T0.2,后端脚手架,后端工程脚手架搭建 (FastAPI + SQLAlchemy),初始化 requirements.txt，封装 core/config.py（Pydantic Settings 读取.env）与 core/database.py（引擎与 SessionLocal），搭建 app/main.py 服务入口与 CORS 配置,P0,已完成,后端
+M0,项目骨架与基础设施基线,T0.3,数据迁移,Alembic 增量版本迁移机制基线,初始化 alembic.ini 与 alembic/env.py，对齐 Base.metadata 与动态连接串，验证初始迁移脚本生成机制，确保零删表纯增量热升级能力,P0,已完成,后端
+M0,项目骨架与基础设施基线,T0.4,前端脚手架,前端工程骨架与基础体验构建 (Vue 3 + Element Plus),Vite + Vue 3 + TS 基础工程搭建，集成 Element Plus 全局中文包，配置无鉴权免密直进路由，搭建 LeftSidebar.vue（纯中文编号分级菜单）与 MainWorkspace.vue 工作视窗,P0,已完成,前端
+M1,通用存储与解耦核心组件包,T1.1,存储引擎,后端动态附件存储与分发引擎,定义 sys_attachment 通用附件元数据表模型，编写 r_storage.py 实现按 files/{biz_type}/{YYYYMM}/{uuid}.ext 动态分片上传与防路径穿透安全下载接口,P0,已完成,后端
+M1,通用存储与解耦核心组件包,T1.2,独立组件,前端独立上传组件包 (components/uploader/),"实现 src/components/uploader/ 自包含独立包（index.vue, useUploader.ts, types.ts），接收 bizType 和 bizId，支持拖拽、流式直传、进度条与列表渲染",P1,已完成,前端
+M1,通用存储与解耦核心组件包,T1.3,独立组件,前端独立富文本组件包 (components/editor/),"集成 WangEditor 5 核心自包含包（index.vue, config.ts, types.ts），内置图片/附件流式上传钩子直接对接 r_storage 后端存储",P1,已完成,前端
+M1,通用存储与解耦核心组件包,T1.4,交互规范,前端 70% 宽幅抽屉与 Dirty Check 表单防呆套件,封装 useDirtyCheck.ts 状态比对钩子，抽屉关闭时若有未保存脏数据强制弹出 Element Plus 二次警示确认框，阻止误关丢失,P0,已完成,前端
+M1,通用存储与解耦核心组件包,T1.5,开发套件,开发态 AI 提词器组件包 (components/dev/teleprompter/),实现 Alt+X 全局快捷键唤出、鼠标接管 DOM 元素悬浮拾取高亮、信标提取与组件元数据解析，一键生成投递提示词并复制,P1,已完成,前端
+M2,模块一：MainData 主数据管理,T2.1,数据模型,主数据数据模型与 Alembic 迁移脚本,定义 sqm_supplier（供应商）、sqm_project（项目）、sqm_part（零件，FK关联项目）实体模型，执行 alembic revision 生成首批业务迁移脚本,P0,已完成,后端
+M2,模块一：MainData 主数据管理,T2.2,API接口,主数据后端 API 契约与接口实现 (r_maindata.py),编写 schemas/main_data.py 数据契约，实现供应商、项目、零件清单的分页查询、条件过滤、详情查看、新增、编辑与删除接口,P0,已完成,后端
+M2,模块一：MainData 主数据管理,T2.3,业务视图,功能 1.1 供应商清单与抽屉表单 (1.1_supplier/),目录 1.1_supplier/ 下创建 SupplierList.vue（准入状态Tag/多条件检索/表格）与 SupplierForm.vue（70% 宽幅抽屉、表单校验与防呆）,P0,已完成,前端
+M2,模块一：MainData 主数据管理,T2.4,业务视图,功能 1.2 零件清单与抽屉表单 (1.2_part/),目录 1.2_part/ 下创建 PartList.vue（零件号/车型项目级联显示/图纸版本）与 PartForm.vue（70% 抽屉、所属项目选择与防呆）,P0,已完成,前端
+M2,模块一：MainData 主数据管理,T2.5,业务视图,功能 1.3 项目清单与抽屉表单 (1.3_project/),目录 1.3_project/ 下创建 ProjectList.vue（车型代号/平台/SOP节点日历）与 ProjectForm.vue（70% 抽屉与量产节点防呆）,P0,已完成,前端
+M3,模块二：SQM 供应商质量管理,T3.1,数据模型,SQM 质量业务数据模型与迁移脚本,定义 sqm_part_dev（零件与供应商双向绑定、OTS/工装/PPAP阶段）、sqm_quality_issue（问题单号、现象描述、轻量化改善方案）实体模型并执行迁移,P0,已完成,后端
+M3,模块二：SQM 供应商质量管理,T3.2,API接口,SQM 后端业务 API 实现 (r_sqm.py),实现零件开发管理接口（阶段进度推进与状态更新）与质量问题台账接口（单号生成、异常记录、改善图文内容存储、关联附件元数据流）,P0,已完成,后端
+M3,模块二：SQM 供应商质量管理,T3.3,业务视图,功能 2.1 零件开发管理视图 (2.1_part_dev/),目录 2.1_part_dev/ 下创建 PartDevList.vue（零件与供应商双向绑定看板/状态流转轴）与 PartDevForm.vue（70% 抽屉维护试制节点）,P0,已完成,前端
+M3,模块二：SQM 供应商质量管理,T3.4,业务视图,功能 2.2 质量问题清单与改善报告视图 (2.2_quality_issue/),目录 2.2_quality_issue/ 下创建 QualityIssueList.vue（问题台账、闭环状态）与 QualityIssueForm.vue（70% 抽屉内嵌富文本与整改附件上传组件）,P0,已完成,前端
+M4,模块三：CTQ 关键质量特性,T4.1,数据模型,CTQ 数据模型与迁移脚本,定义 sqm_ctq 实体模型（part_id 外键关联零件，feature_code 特征代号，feature_type 区分 KPC产品/KCC过程特性，tolerance 规格公差，frequency 检验频次），执行增量迁移,P1,已完成,后端
+M4,模块三：CTQ 关键质量特性,T4.2,API接口,CTQ 后端 API 路由实现 (r_ctq.py),编写 schemas/ctq.py 契约，实现按零件关联维度查询 CTQ 列表、批量录入/更新关键特性、公差规格检验指标接口,P1,已完成,后端
+M4,模块三：CTQ 关键质量特性,T4.3,业务视图,功能 3.1 关键特征清单视图 (3.1_ctq/),目录 3.1_ctq/ 下创建 CTQList.vue（KPC/KCC 特征彩色徽章、公差区间、检测频次表格）与 CTQForm.vue（70% 宽幅抽屉规格配置与防呆）,P1,已完成,前端
+M5,系统集成、数据平滑迁移与交付,T5.1,集成测试,全链路端到端功能与体验联调,前后端端到端联调：左侧编号导航免密直达、70% 抽屉平滑滑出、Dirty Check 未保存二次防呆阻断、Alt+X 提词器元素拾取复制、流式文件上传回显,P0,已完成,全栈
+M5,系统集成、数据平滑迁移与交付,T5.2,迁移验证,目标机环境（密码 Tars123451）热升级无损验证,模拟历史数据场景，通过 .env 切换连接配置，执行 alembic upgrade head 验证增量升级，确认现有表与记录 100% 完好无损,P0,已完成,全栈
+M5,系统集成、数据平滑迁移与交付,T5.3,交付部署,工程交付文档与一键启动脚本,编写全流程 README.md 说明文档、Windows 一键启动脚本（FastAPI 后端 uvicorn 与 Vue 前端 npm run dev），建立架构维护与二期插槽说明,P1,已完成,全栈

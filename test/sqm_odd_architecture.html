@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>供应商质量 ODD 架构</title>
+  <style>
+    @page {
+      size: A4 portrait;
+      margin: 0;
+    }
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    html, body {
+      margin: 0;
+      padding: 0;
+      background-color: #334155;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      color: #0f172a;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+    body {
+      padding: 16px 0;
+    }
+    .toolbar {
+      width: 210mm;
+      margin: 0 auto 10px auto;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: #0f172a;
+      padding: 6px 14px;
+      border-radius: 4px;
+      color: #fff;
+    }
+    .toolbar-title { font-size: 13px; font-weight: 600; }
+    .btn-print {
+      background: #2563eb;
+      color: #fff;
+      border: none;
+      padding: 5px 12px;
+      border-radius: 4px;
+      font-size: 12px;
+      cursor: pointer;
+    }
+    .btn-print:hover { background: #1d4ed8; }
+
+    /* A4 标准图纸容器 */
+    .a4-page {
+      width: 210mm;
+      height: 297mm;
+      max-width: 210mm;
+      max-height: 297mm;
+      background: #ffffff;
+      margin: 0 auto;
+      padding: 8mm 10mm;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      box-sizing: border-box;
+      overflow: hidden;
+    }
+
+    svg {
+      width: 100%;
+      height: 100%;
+      max-width: 100%;
+      max-height: 100%;
+      display: block;
+    }
+
+    @media print {
+      html, body {
+        width: 210mm !important;
+        height: 297mm !important;
+        max-width: 210mm !important;
+        max-height: 297mm !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        overflow: hidden !important;
+        background: #ffffff !important;
+      }
+      .toolbar {
+        display: none !important;
+      }
+      .a4-page {
+        margin: 0 !important;
+        box-shadow: none !important;
+        padding: 6mm 8mm !important;
+        width: 210mm !important;
+        height: 297mm !important;
+        max-width: 210mm !important;
+        max-height: 297mm !important;
+        page-break-before: avoid !important;
+        page-break-inside: avoid !important;
+        page-break-after: avoid !important;
+        break-before: avoid !important;
+        break-inside: avoid !important;
+        break-after: avoid !important;
+        box-sizing: border-box !important;
+        overflow: hidden !important;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="toolbar">
+    <div class="toolbar-title">供应商质量 ODD 架构图</div>
+    <button class="btn-print" onclick="window.print()">🖨️ 打印 / 另存为 PDF</button>
+  </div>
+
+  <div class="a4-page">
+    <svg viewBox="0 0 760 850" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <!-- 箭头标记 -->
+        <marker id="arrow-blue" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M 0 1 L 10 5 L 0 9 z" fill="#0284c7" />
+        </marker>
+        <marker id="arrow-red" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M 0 1 L 10 5 L 0 9 z" fill="#b91c1c" />
+        </marker>
+      </defs>
+
+      <!-- 1. 顶部极简标题 -->
+      <text x="380" y="30" text-anchor="middle" font-size="18" font-weight="800" fill="#0f172a" letter-spacing="0.5">供应商质量 ODD (运行设计域) 控制架构</text>
+      <line x1="20" y1="44" x2="740" y2="44" stroke="#0f172a" stroke-width="2" />
+
+      <!-- 2. SSOT 单一事实源层 (顶层总线) -->
+      <g transform="translate(20, 56)">
+        <rect x="0" y="0" width="720" height="58" rx="4" fill="#f8fafc" stroke="#334155" stroke-width="1.5" />
+        <rect x="0" y="0" width="720" height="24" rx="4" fill="#1e293b" />
+        <text x="12" y="16" font-size="12" font-weight="700" fill="#ffffff">【7. 系统状态】SSOT (Single Source of Truth)</text>
+        <text x="14" y="43" font-size="11" fill="#334155">
+          <tspan font-weight="700" fill="#0f172a">PLM / QMS 统一数据事实源：</tspan>研发 · 采购 · 质量 严格保证物料编码、BOM版本与工程变更同版同源
+        </text>
+      </g>
+
+      <!-- 3. MVP ➔ 量产 阶段动态适配横幅 (新增核心概念) -->
+      <g transform="translate(20, 122)">
+        <rect x="0" y="0" width="720" height="52" rx="4" fill="#f8fafc" stroke="#64748b" stroke-width="1.2" />
+        <rect x="0" y="0" width="130" height="52" rx="4" fill="#334155" />
+        <text x="65" y="24" text-anchor="middle" font-size="11.5" font-weight="800" fill="#ffffff">阶段动态演进</text>
+        <text x="65" y="40" text-anchor="middle" font-size="10" font-weight="600" fill="#94a3b8">(ODD 边界分层)</text>
+
+        <!-- MVP 阶段策略 -->
+        <text x="144" y="22" font-size="11" font-weight="700" fill="#0369a1">★ MVP / 原型验证阶段：</text>
+        <text x="270" y="22" font-size="11" fill="#334155">聚焦核心功能(CTQ)快速闭环；支持 S/T 态样件敏捷特采，拒绝未知风险</text>
+
+        <!-- 量产 阶段策略 -->
+        <text x="144" y="41" font-size="11" font-weight="700" fill="#0f172a">★ 批量量产放量阶段：</text>
+        <text x="270" y="41" font-size="11" fill="#334155">刚性执行 P 态放行、设计冻结与制程稳定性，坚决阻断任何灰色带病流转</text>
+      </g>
+
+      <!-- 4. 双轨栏头 -->
+      <g transform="translate(20, 182)">
+        <line x1="240" y1="-8" x2="240" y2="10" stroke="#0284c7" stroke-width="1.5" marker-end="url(#arrow-blue)" />
+        <line x1="600" y1="-8" x2="600" y2="10" stroke="#b91c1c" stroke-width="1.5" stroke-dasharray="3,3" marker-end="url(#arrow-red)" />
+
+        <rect x="0" y="10" width="460" height="26" rx="4" fill="#eff6ff" stroke="#3b82f6" stroke-width="1.5" />
+        <text x="230" y="27" text-anchor="middle" font-size="12" font-weight="800" fill="#1d4ed8">🟢 In-ODD 正常流转域 (三大门禁控制)</text>
+
+        <rect x="480" y="10" width="240" height="26" rx="4" fill="#fef2f2" stroke="#ef4444" stroke-width="1.5" />
+        <text x="600" y="27" text-anchor="middle" font-size="12" font-weight="800" fill="#b91c1c">🔴 Out-of-ODD 降级与接管处置</text>
+      </g>
+
+      <!-- 5. 左侧主管道：三大门禁 -->
+      <!-- 门禁 1 · 准入与基线 -->
+      <g transform="translate(20, 226)">
+        <rect x="0" y="0" width="460" height="136" rx="4" fill="#ffffff" stroke="#94a3b8" stroke-width="1.2" />
+        <path d="M 0 0 L 460 0 L 460 25 L 0 25 Z" fill="#f1f5f9" />
+        <text x="12" y="17" font-size="12" font-weight="700" fill="#0f172a">【门禁 1 · 准入与基线锁定】 (Admission Baseline)</text>
+
+        <text x="14" y="44" font-size="11" font-weight="700" fill="#0f172a">1. 适用范围 & 阶段：<tspan font-weight="400" fill="#334155">物料分类 / 供方准入 / [项目阶段: MVP ➔ 量产]</tspan></text>
+        <text x="24" y="60" font-size="10.5" fill="#047857" font-weight="700">✓ 门禁判定：物料与供方均在批准 Scope 内</text>
+
+        <text x="14" y="78" font-size="11" font-weight="700" fill="#0f172a">3. 前置条件：<tspan font-weight="400" fill="#334155">结构与电气接口冻结 / BOM受控锁定 / 质量协议</tspan></text>
+        <text x="24" y="94" font-size="10.5" fill="#047857" font-weight="700">✓ 门禁判定：版本唯一受控可追溯；设计变更供方已书面确认</text>
+
+        <text x="14" y="112" font-size="11" font-weight="700" fill="#0f172a">4. 供应组合：<tspan font-weight="400" fill="#334155">主供集成锁定 / 备供预研 / 核心CTQ公差堆叠</tspan></text>
+        <text x="24" y="128" font-size="10.5" fill="#047857" font-weight="700">✓ 门禁判定：主供架构锁定 + 关键子件验收基线一致</text>
+      </g>
+
+      <!-- 门禁1 -> 门禁2 箭头 -->
+      <line x1="250" y1="362" x2="250" y2="394" stroke="#0284c7" stroke-width="2" marker-end="url(#arrow-blue)" />
+      <rect x="180" y="370" width="140" height="16" rx="3" fill="#f0f9ff" stroke="#bae6fd" stroke-width="1"/>
+      <text x="250" y="382" text-anchor="middle" font-size="10" font-weight="700" fill="#0284c7">准入合规 · 基线已锁定</text>
+
+      <!-- 门禁 2 · 零件状态与制程能力 -->
+      <g transform="translate(20, 400)">
+        <rect x="0" y="0" width="460" height="136" rx="4" fill="#ffffff" stroke="#94a3b8" stroke-width="1.2" />
+        <path d="M 0 0 L 460 0 L 460 25 L 0 25 Z" fill="#f1f5f9" />
+        <text x="12" y="17" font-size="12" font-weight="700" fill="#0f172a">【门禁 2 · 零件状态与制程能力】 (Lifecycle & Capability)</text>
+
+        <text x="14" y="44" font-size="11" font-weight="700" fill="#0f172a">2. 零件状态：<tspan font-weight="400" fill="#334155">S态(样件) / T态(试产) / P态(量产)</tspan></text>
+        <text x="24" y="60" font-size="10.5" fill="#0369a1" font-weight="700">★ MVP阶段：S/T态样件快速迭代，闭环核心CTQ；特采显性化</text>
+        <text x="24" y="76" font-size="10.5" fill="#047857" font-weight="700">★ 量产阶段：状态与BOM严格一致；仅 P 态允许批量放行</text>
+
+        <text x="14" y="98" font-size="11" font-weight="700" fill="#0f172a">5. 过程能力：<tspan font-weight="400" fill="#334155">制造过程受控 / PPAP批准 / 批次全流程追溯</tspan></text>
+        <text x="24" y="116" font-size="10.5" fill="#047857" font-weight="700">✓ 门禁判定：量产前PPAP批准；设备、工装治具与人员资质受控</text>
+      </g>
+
+      <!-- 门禁2 -> 门禁3 箭头 -->
+      <line x1="250" y1="536" x2="250" y2="568" stroke="#0284c7" stroke-width="2" marker-end="url(#arrow-blue)" />
+      <rect x="180" y="544" width="140" height="16" rx="3" fill="#f0f9ff" stroke="#bae6fd" stroke-width="1"/>
+      <text x="250" y="556" text-anchor="middle" font-size="10" font-weight="700" fill="#0284c7">状态受控 · 能力达标</text>
+
+      <!-- 门禁 3 · 检验与出入库放行 -->
+      <g transform="translate(20, 574)">
+        <rect x="0" y="0" width="460" height="100" rx="4" fill="#ffffff" stroke="#94a3b8" stroke-width="1.2" />
+        <path d="M 0 0 L 460 0 L 460 25 L 0 25 Z" fill="#f1f5f9" />
+        <text x="12" y="17" font-size="12" font-weight="700" fill="#0f172a">【门禁 3 · 检验与出入库放行】 (Verification & Gatekeeper)</text>
+
+        <text x="14" y="46" font-size="11" font-weight="700" fill="#0f172a">6. 检验与放行：<tspan font-weight="400" fill="#334155">DVT / PPAP / IQC 分层检验职责与抽检方案</tspan></text>
+        <text x="24" y="65" font-size="10.5" fill="#047857" font-weight="700">✓ 门禁判定：“谁来检、检什么、何时放行”准则完全对齐</text>
+        <text x="24" y="83" font-size="10.5" fill="#047857" font-weight="700">✓ 门禁判定：供需测试方法一致，原始测试数据完备留痕</text>
+      </g>
+
+      <!-- 门禁3 -> 正常终态 箭头 -->
+      <line x1="250" y1="674" x2="250" y2="710" stroke="#059669" stroke-width="2" marker-end="url(#arrow-blue)" />
+      <rect x="180" y="682" width="140" height="16" rx="3" fill="#ecfdf5" stroke="#a7f3d0" stroke-width="1"/>
+      <text x="250" y="694" text-anchor="middle" font-size="10" font-weight="700" fill="#059669">检验合格 · 争议清零</text>
+
+      <!-- 正常终态：批量放行 -->
+      <g transform="translate(20, 716)">
+        <rect x="0" y="0" width="460" height="62" rx="6" fill="#f0fdf4" stroke="#16a34a" stroke-width="1.8" />
+        <text x="230" y="27" text-anchor="middle" font-size="13.5" font-weight="800" fill="#15803d">✅ 交付放行 (安全边界内全速流转)</text>
+        <text x="230" y="47" text-anchor="middle" font-size="11" fill="#166534">在 ODD 范围内：MVP阶段保障研发快速迭代，量产阶段保障规模稳定交付</text>
+      </g>
+
+      <!-- 6. 右侧副管道：Out-of-ODD 越界降级与接管处置 -->
+      <g transform="translate(500, 226)">
+        <rect x="0" y="0" width="240" height="448" rx="4" fill="#fffafa" stroke="#dc2626" stroke-width="1.2" stroke-dasharray="4,3" />
+
+        <!-- 对应门禁 1 越界 -->
+        <g transform="translate(10, 10)">
+          <text x="0" y="12" font-size="11" font-weight="800" fill="#991b1b">准入越界 ➔ 阻断与分流</text>
+          <text x="0" y="30" font-size="10.5" font-weight="700" fill="#0f172a">• 范围超纲：</text>
+          <text x="10" y="46" font-size="10.5" fill="#b91c1c" font-weight="700">➔ 转新物料 / 新供方评审流程</text>
+          <text x="0" y="64" font-size="10.5" font-weight="700" fill="#0f172a">• 未冻结 / 未确认：</text>
+          <text x="10" y="80" font-size="10.5" fill="#b91c1c" font-weight="700">➔ 暂停批量放行，无冻结不投产</text>
+          <text x="0" y="98" font-size="10.5" font-weight="700" fill="#0f172a">• 组合未锁定：</text>
+          <text x="10" y="114" font-size="10.5" fill="#b91c1c" font-weight="700">➔ 单点风险升级，禁止放量</text>
+        </g>
+
+        <line x1="10" y1="138" x2="230" y2="138" stroke="#fecaca" stroke-width="1" />
+
+        <!-- 对应门禁 2 越界 -->
+        <g transform="translate(10, 150)">
+          <text x="0" y="12" font-size="11" font-weight="800" fill="#991b1b">制造越界 ➔ 隔离与特采</text>
+          <text x="0" y="30" font-size="10.5" font-weight="700" fill="#0f172a">• 样件混线：</text>
+          <text x="10" y="46" font-size="10.5" fill="#b91c1c" font-weight="700">➔ 物理隔离，严禁样件混入产线</text>
+          <text x="0" y="66" font-size="10.5" font-weight="700" fill="#0f172a">• MVP敏捷特采：</text>
+          <text x="10" y="82" font-size="10.5" fill="#b91c1c" font-weight="700">➔ 破例装机必须升级签批并显性留痕</text>
+          <text x="0" y="102" font-size="10.5" font-weight="700" fill="#0f172a">• 过程能力不足：</text>
+          <text x="10" y="118" font-size="10.5" fill="#b91c1c" font-weight="700">➔ 未批不量产；启动加严检验/驻厂</text>
+        </g>
+
+        <line x1="10" y1="282" x2="230" y2="282" stroke="#fecaca" stroke-width="1" />
+
+        <!-- 对应门禁 3 越界 -->
+        <g transform="translate(10, 294)">
+          <text x="0" y="12" font-size="11" font-weight="800" fill="#991b1b">检验异常 ➔ 熔断与退回</text>
+          <text x="0" y="30" font-size="10.5" font-weight="700" fill="#0f172a">• 漏检 / 测试争议 / 数据缺失：</text>
+          <text x="10" y="48" font-size="10.5" fill="#b91c1c" font-weight="700">➔ 坚决阻断放行</text>
+          <text x="10" y="66" font-size="10.5" fill="#b91c1c" font-weight="700">➔ 批次退回 / 开单隔离 / 停线核查</text>
+        </g>
+
+        <line x1="10" y1="376" x2="230" y2="376" stroke="#fecaca" stroke-width="1" />
+
+        <!-- 汇总指示 -->
+        <text x="120" y="404" text-anchor="middle" font-size="10.5" font-weight="700" fill="#991b1b">越界事件统一收敛至 ➔</text>
+        <line x1="120" y1="414" x2="120" y2="442" stroke="#b91c1c" stroke-width="1.5" marker-end="url(#arrow-red)" />
+      </g>
+
+      <!-- 越界水平连线 -->
+      <path d="M 480 294 L 500 294" stroke="#b91c1c" stroke-width="1.2" stroke-dasharray="3,3" marker-end="url(#arrow-red)" />
+      <path d="M 480 468 L 500 468" stroke="#b91c1c" stroke-width="1.2" stroke-dasharray="3,3" marker-end="url(#arrow-red)" />
+      <path d="M 480 624 L 500 624" stroke="#b91c1c" stroke-width="1.2" stroke-dasharray="3,3" marker-end="url(#arrow-red)" />
+
+      <!-- 7. 终态：【8. 退出与降级规则】核心铁律 -->
+      <g transform="translate(500, 690)">
+        <rect x="0" y="0" width="240" height="88" rx="6" fill="#fef2f2" stroke="#b91c1c" stroke-width="1.8" />
+        <text x="120" y="23" text-anchor="middle" font-size="12" font-weight="800" fill="#991b1b">【8. 退出与降级规则】核心准则</text>
+        <text x="120" y="42" text-anchor="middle" font-size="11" font-weight="800" fill="#7f1d1d">边界外严禁“先干起来”</text>
+        <text x="120" y="60" text-anchor="middle" font-size="10.5" fill="#991b1b">任何越界必须且只能二选一：</text>
+        <text x="120" y="76" text-anchor="middle" font-size="10.5" font-weight="700" fill="#7f1d1d">① 特采升级审批  或  ② 立即停线退出隔离</text>
+      </g>
+    </svg>
+  </div>
+
+</body>
+</html>

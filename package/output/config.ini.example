@@ -1,0 +1,18 @@
+[server]
+host = 0.0.0.0
+port = 8010
+
+[database]
+# 默认使用《SQM项目.doc》规定的 MySQL 数据库架构
+type = mysql
+mysql_host = 127.0.0.1
+mysql_port = 3306
+mysql_user = root
+mysql_password = Tars123451
+mysql_database = sqm
+
+# 离线备用单机模式（若目标机器无 MySQL 环境时使用）：
+sqlite_path = data/sqm_data.db
+
+[storage]
+root_path = storage

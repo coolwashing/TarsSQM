@@ -1,0 +1,41 @@
+# Environment variables
+.env
+.env.local
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+
+# Node / Frontend
+node_modules/
+dist/
+dist-ssr/
+*.local
+
+# Storage uploaded files (keep directory structure via .gitkeep)
+storage/files/*
+!storage/files/.gitkeep
+
+# IDE & OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Database
+data/*.db
+data/*.sqlite
+data/*.sqlite3
+
+# Packaging & Build outputs
+package/build/
+package/output/*.exe
+package/output/*.zip
+package/output/*.tar.gz
+
