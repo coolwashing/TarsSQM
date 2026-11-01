@@ -89,7 +89,7 @@
           <!-- 状态标签与快捷操作 -->
           <div class="status-col" @click.stop>
             <el-dropdown trigger="click" @command="(cmd: any) => handleQuickStatus(item, cmd)">
-              <span class="status-pill" :class="item.status.toLowerCase()">
+              <span class="status-pill" :class="(item.status || 'TODO').toLowerCase()">
                 {{ getStatusLabel(item.status) }} ▾
               </span>
               <template #dropdown>
@@ -145,14 +145,7 @@
       </div>
     </div>
 
-    <!-- 内置任务详情抽屉 -->
-    <TaskDetailDrawer
-      v-model="detailDrawerVisible"
-      :task-id="activeTaskId"
-      @refresh="fetchTasks"
-    />
-
-    <!-- 内置新建任务弹窗 -->
+    <!-- 统一 70% 宽幅可拖拽协同任务抽屉 (兼顾查看与编辑) -->
     <TaskEditModal
       v-model="createModalVisible"
       :task="draftTask"
@@ -167,7 +160,6 @@ import { Plus } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { taskApi } from '@/api/task'
 import type { TaskItem, TaskSourceType, TaskStatus, TaskPriority } from '@/types/task'
-import TaskDetailDrawer from '@/views/task/components/TaskDetailDrawer.vue'
 import TaskEditModal from '@/views/task/components/TaskEditModal.vue'
 
 const props = defineProps<{
@@ -184,10 +176,6 @@ const emit = defineEmits<{
 const loading = ref(false)
 const taskList = ref<TaskItem[]>([])
 const statusFilter = ref<'ALL' | 'ACTIVE' | 'DONE'>('ALL')
-
-const detailDrawerVisible = ref(false)
-const activeTaskId = ref<number | null>(null)
-
 const createModalVisible = ref(false)
 const draftTask = ref<Partial<TaskItem> | null>(null)
 
@@ -241,8 +229,13 @@ onMounted(() => {
 })
 
 const openDetailDrawer = (id: number) => {
-  activeTaskId.value = id
-  detailDrawerVisible.value = true
+  const found = taskList.value.find(t => t.id === id)
+  if (found) {
+    draftTask.value = found
+  } else {
+    draftTask.value = { id } as any
+  }
+  createModalVisible.value = true
 }
 
 const openCreateModal = () => {

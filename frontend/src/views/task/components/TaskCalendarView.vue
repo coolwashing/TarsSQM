@@ -75,7 +75,7 @@
             :key="task.id"
             class="calendar-task-bar"
             :class="[
-              task.priority.toLowerCase(),
+              (task.priority || 'medium').toLowerCase(),
               {
                 'is-closed': task.status === 'DONE',
                 'is-overdue': task.is_overdue

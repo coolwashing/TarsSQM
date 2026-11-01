@@ -21,6 +21,9 @@ export const taskApi = {
   getTaskDetail: (id: number) => {
     return axios.get<TaskItem>(`/api/tasks/${id}`).then(res => res.data)
   },
+  getTask: (id: number) => {
+    return axios.get<TaskItem>(`/api/tasks/${id}`).then(res => res.data)
+  },
 
   // 创建任务
   createTask: (data: Partial<TaskItem>) => {

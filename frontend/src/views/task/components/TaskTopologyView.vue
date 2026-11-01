@@ -32,7 +32,7 @@
               :key="node.id"
               class="dag-node-card"
               :class="[
-                node.status.toLowerCase(),
+                (node.status || 'TODO').toLowerCase(),
                 {
                   'is-active': selectedNodeId === node.id,
                   'is-blocked': isNodeBlocked(node)
@@ -44,7 +44,7 @@
               <div class="node-top-row">
                 <span class="node-code">{{ node.task_code }}</span>
                 <span v-if="isNodeBlocked(node)" class="node-blocked-tag">⚠️ 依赖阻塞</span>
-                <span v-else class="node-status-tag" :class="node.status.toLowerCase()">
+                <span v-else class="node-status-tag" :class="(node.status || 'TODO').toLowerCase()">
                   {{ getStatusText(node.status) }}
                 </span>
               </div>
@@ -72,7 +72,7 @@
               :key="node.id"
               class="dag-node-card"
               :class="[
-                node.status.toLowerCase(),
+                (node.status || 'TODO').toLowerCase(),
                 {
                   'is-active': selectedNodeId === node.id,
                   'is-blocked': isNodeBlocked(node)
@@ -84,7 +84,7 @@
               <div class="node-top-row">
                 <span class="node-code">{{ node.task_code }}</span>
                 <span v-if="isNodeBlocked(node)" class="node-blocked-tag">⚠️ 依赖阻塞</span>
-                <span v-else class="node-status-tag" :class="node.status.toLowerCase()">
+                <span v-else class="node-status-tag" :class="(node.status || 'TODO').toLowerCase()">
                   {{ getStatusText(node.status) }}
                 </span>
               </div>
@@ -112,7 +112,7 @@
               :key="node.id"
               class="dag-node-card"
               :class="[
-                node.status.toLowerCase(),
+                (node.status || 'TODO').toLowerCase(),
                 {
                   'is-active': selectedNodeId === node.id,
                   'is-blocked': isNodeBlocked(node)
@@ -124,7 +124,7 @@
               <div class="node-top-row">
                 <span class="node-code">{{ node.task_code }}</span>
                 <span v-if="isNodeBlocked(node)" class="node-blocked-tag">⚠️ 依赖阻塞</span>
-                <span v-else class="node-status-tag" :class="node.status.toLowerCase()">
+                <span v-else class="node-status-tag" :class="(node.status || 'TODO').toLowerCase()">
                   {{ getStatusText(node.status) }}
                 </span>
               </div>
@@ -152,7 +152,7 @@
               :key="node.id"
               class="dag-node-card"
               :class="[
-                node.status.toLowerCase(),
+                (node.status || 'TODO').toLowerCase(),
                 {
                   'is-active': selectedNodeId === node.id,
                   'is-blocked': isNodeBlocked(node)
@@ -164,7 +164,7 @@
               <div class="node-top-row">
                 <span class="node-code">{{ node.task_code }}</span>
                 <span v-if="isNodeBlocked(node)" class="node-blocked-tag">⚠️ 依赖阻塞</span>
-                <span v-else class="node-status-tag" :class="node.status.toLowerCase()">
+                <span v-else class="node-status-tag" :class="(node.status || 'TODO').toLowerCase()">
                   {{ getStatusText(node.status) }}
                 </span>
               </div>

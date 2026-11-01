@@ -214,6 +214,11 @@
               <el-empty :description="emptyText || '未检索到符合条件的数据记录'" />
             </slot>
           </template>
+
+          <!-- 表格底部追加行插槽 (如飞书多维表格行底快速加行) -->
+          <template v-if="$slots.append" #append>
+            <slot name="append" />
+          </template>
         </el-table>
       </div>
 
@@ -670,6 +675,12 @@ defineExpose({
 .custom-fit-table {
   width: 100%;
   border-radius: 6px;
+}
+
+.custom-fit-table :deep(.el-table__append-wrapper) {
+  overflow: visible;
+  min-width: 100%;
+  width: 100%;
 }
 
 /* 确保单元格长文本不换行、显示省略号 */

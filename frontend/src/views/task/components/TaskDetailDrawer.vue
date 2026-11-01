@@ -15,7 +15,7 @@
       <div class="task-hero-banner">
         <!-- 业务源头指示条 -->
         <div class="source-info-bar">
-          <span class="source-type-pill" :class="task.source_type.toLowerCase()">
+          <span class="source-type-pill" :class="(task.source_type || 'custom').toLowerCase()">
             {{ getSourceIcon(task.source_type) }} {{ getSourceName(task.source_type) }}
           </span>
           <span class="source-title-text" :title="task.source_title || '通用待办'">

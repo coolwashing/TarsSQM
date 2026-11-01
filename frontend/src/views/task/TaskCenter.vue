@@ -52,69 +52,13 @@
           :icon="Plus"
           @click="openCreateModal"
         >
-          + 新建任务
+          + 详细立项
         </el-button>
       </div>
     </header>
 
-    <!-- 2. 多维聚合检索与切片工具栏 -->
+    <!-- 2. 多维聚合单行检索与切片工具栏 (高效紧凑) -->
     <div class="task-filter-toolbar">
-      <!-- 业务源头切片 (供应商 / 零件 / CTQ / 规程 / 自建) -->
-      <div class="filter-row source-row">
-        <span class="filter-prefix">业务源头：</span>
-        <div class="chip-group">
-          <button
-            type="button"
-            class="filter-chip"
-            :class="{ active: filters.source_type === 'ALL' }"
-            @click="setSourceType('ALL')"
-          >
-            全部源头
-          </button>
-          <button
-            type="button"
-            class="filter-chip"
-            :class="{ active: filters.source_type === 'SUPPLIER' }"
-            @click="setSourceType('SUPPLIER')"
-          >
-            🏢 供应商业务
-          </button>
-          <button
-            type="button"
-            class="filter-chip"
-            :class="{ active: filters.source_type === 'PART' }"
-            @click="setSourceType('PART')"
-          >
-            ⚙️ 零件试产
-          </button>
-          <button
-            type="button"
-            class="filter-chip"
-            :class="{ active: filters.source_type === 'CTQ' }"
-            @click="setSourceType('CTQ')"
-          >
-            🎯 CTQ 关键特性
-          </button>
-          <button
-            type="button"
-            class="filter-chip"
-            :class="{ active: filters.source_type === 'DOC_KB' }"
-            @click="setSourceType('DOC_KB')"
-          >
-            📑 规程知识库
-          </button>
-          <button
-            type="button"
-            class="filter-chip"
-            :class="{ active: filters.source_type === 'CUSTOM' }"
-            @click="setSourceType('CUSTOM')"
-          >
-            📋 自建协同
-          </button>
-        </div>
-      </div>
-
-      <!-- 复合条件与模糊搜索 -->
       <div class="filter-row search-row">
         <el-input
           v-model="filters.keyword"
@@ -124,6 +68,21 @@
           class="search-input"
           @keyup.enter="handleSearch"
         />
+
+        <el-select
+          v-model="filters.source_type"
+          placeholder="业务源头"
+          clearable
+          class="filter-select source-select"
+          @change="handleSourceChange"
+        >
+          <el-option label="全部业务源头" value="ALL" />
+          <el-option label="🏢 供应商业务" value="SUPPLIER" />
+          <el-option label="⚙️ 零件试产" value="PART" />
+          <el-option label="🎯 CTQ 关键特性" value="CTQ" />
+          <el-option label="📑 规程知识库" value="DOC_KB" />
+          <el-option label="📋 自建协同" value="CUSTOM" />
+        </el-select>
 
         <el-select
           v-model="filters.status"
@@ -158,7 +117,7 @@
           v-model="filters.due_filter"
           placeholder="排期到期日"
           clearable
-          class="filter-select"
+          class="filter-select due-select"
           @change="handleSearch"
         >
           <el-option label="全部排期" value="all" />
@@ -178,73 +137,22 @@
 
     <!-- 3. 主视图展示区 (Grid 视图 vs Kanban 视图) -->
     <main class="task-view-container">
-      <!-- 视图 A：总任务表 (带快捷自动加行功能) -->
+      <!-- 视图 A：总任务表 (集成飞书多维表格风格行底快速加行) -->
       <div v-show="viewMode === 'grid'" class="grid-view-wrapper">
-        <!-- ⚡ 快速录入与自动加行条 (回车即刻自动生成并就绪下一行) -->
-        <div class="quick-add-row-strip">
-          <div class="strip-badge">
-            <span class="strip-icon">⚡</span>
-            <span class="strip-text">快速加行</span>
-          </div>
-          <el-input
-            ref="quickTitleInputRef"
-            v-model="quickRow.title"
-            placeholder="输入新任务标题，按回车立即创建并自动开启下一行..."
-            class="quick-input title-input"
-            clearable
-            @keyup.enter="handleAutoAddRow"
-          />
-          <el-select v-model="quickRow.source_type" class="quick-input source-select" placeholder="业务源头">
-            <el-option label="🏢 供应商" value="SUPPLIER" />
-            <el-option label="⚙️ 零件试产" value="PART" />
-            <el-option label="🎯 CTQ 特性" value="CTQ" />
-            <el-option label="📑 规程知识" value="DOC_KB" />
-            <el-option label="📋 协同待办" value="CUSTOM" />
-          </el-select>
-          <el-input
-            v-model="quickRow.assignee_name"
-            placeholder="责任人"
-            class="quick-input user-input"
-            @keyup.enter="handleAutoAddRow"
-          />
-          <el-date-picker
-            v-model="quickRow.due_date"
-            type="date"
-            value-format="YYYY-MM-DD"
-            placeholder="截止日期"
-            class="quick-input date-picker"
-          />
-          <el-select v-model="quickRow.priority" class="quick-input prio-select">
-            <el-option label="🟢 普通" value="MEDIUM" />
-            <el-option label="🟡 重点关注" value="HIGH" />
-            <el-option label="🔴 紧急红线" value="URGENT" />
-            <el-option label="⚪ 低" value="LOW" />
-          </el-select>
-          <el-button
-            type="primary"
-            :icon="Plus"
-            class="quick-add-btn"
-            :loading="quickAdding"
-            @click="handleAutoAddRow"
-          >
-            + 确认加行 (Enter)
-          </el-button>
-        </div>
-
         <DataTable
           :columns="columns"
           :data="tableData"
           :loading="loading"
           :pagination="pagination"
-          storage-key="sqm_task_center_list"
+          action-width="150px"
+          storage-key="sqm_task_center_v3"
           @refresh="fetchData"
           @page-change="handlePageChange"
           @size-change="handleSizeChange"
-          @cell-change="handleCellChange"
         >
           <!-- 任务标题列插槽 (可直接点击呼出侧拉抽屉) -->
           <template #title="{ row }">
-            <div class="task-title-cell" @click="openDetailDrawer(row.id)">
+            <div class="task-title-cell" @click="openEditModal(row)">
               <span class="task-title-text" :title="row.title">{{ row.title }}</span>
               <el-tag v-if="row.is_overdue" size="small" type="danger" effect="dark" class="mini-tag">
                 超期
@@ -286,9 +194,9 @@
 
           <!-- 状态列插槽 (支持就地下拉快速流转) -->
           <template #status="{ row }">
-            <el-dropdown trigger="click" @command="(cmd: any) => handleQuickStatusChange(row, cmd)">
-              <span class="status-dropdown-pill" :class="row.status.toLowerCase()">
-                {{ getStatusLabel(row.status) }} ▾
+            <el-dropdown v-if="row" trigger="click" @command="(cmd: any) => handleQuickStatusChange(row, cmd)">
+              <span class="status-dropdown-pill" :class="(row.status || 'TODO').toLowerCase()">
+                {{ getStatusLabel(row.status || 'TODO') }} ▾
               </span>
               <template #dropdown>
                 <el-dropdown-menu>
@@ -312,11 +220,8 @@
 
           <!-- 操作列插槽 -->
           <template #action="{ row }">
-            <el-button link type="primary" size="small" @click="openDetailDrawer(row.id)">
-              详情
-            </el-button>
             <el-button link type="primary" size="small" @click="openEditModal(row)">
-              编辑
+              编辑详情
             </el-button>
             <el-popconfirm
               title="确定删除此协同任务？"
@@ -331,6 +236,121 @@
                 </el-button>
               </template>
             </el-popconfirm>
+          </template>
+
+          <!-- 飞书多维表格风格：表格行底极速行内录入插槽 -->
+          <template #append>
+            <div class="feishu-table-append-zone">
+              <!-- 未激活态：飞书多维表格经典底栏 "+ 添加新任务" -->
+              <div
+                v-if="!isAddingInlineRow"
+                class="feishu-add-row-placeholder"
+                tabindex="0"
+                @click="startInlineAdd"
+                @keydown.enter="startInlineAdd"
+              >
+                <div class="add-btn-inner">
+                  <el-icon class="add-icon"><Plus /></el-icon>
+                  <span class="add-title">添加新任务</span>
+                  <span class="add-tip">点击或按回车快速加行，支持连续录入</span>
+                </div>
+              </div>
+
+              <!-- 激活态：行内直接录入行 (完全融入表格网格与各列) -->
+              <div
+                v-else
+                class="feishu-inline-editor-row"
+                @keyup.esc="cancelInlineAdd"
+              >
+                <div class="inline-cell cell-code">
+                  <span class="new-row-badge">+ 新行</span>
+                </div>
+
+                <div class="inline-cell cell-title">
+                  <el-input
+                    ref="inlineTitleInputRef"
+                    v-model="quickRow.title"
+                    placeholder="输入新任务标题，按回车立即创建并自动开启下一行..."
+                    size="small"
+                    clearable
+                    @keyup.enter="handleAutoAddRow"
+                  >
+                    <template #suffix>
+                      <span class="enter-badge" title="回车即刻自动创建下一行">Enter ↵</span>
+                    </template>
+                  </el-input>
+                </div>
+
+                <div class="inline-cell cell-source">
+                  <el-select
+                    v-model="quickRow.source_type"
+                    placeholder="业务源头"
+                    size="small"
+                    class="inline-select"
+                  >
+                    <el-option label="📋 协同待办" value="CUSTOM" />
+                    <el-option label="🏢 供应商" value="SUPPLIER" />
+                    <el-option label="⚙️ 零件试产" value="PART" />
+                    <el-option label="🎯 CTQ 特性" value="CTQ" />
+                    <el-option label="📑 规程知识" value="DOC_KB" />
+                  </el-select>
+                </div>
+
+                <div class="inline-cell cell-priority">
+                  <el-select
+                    v-model="quickRow.priority"
+                    placeholder="优先级"
+                    size="small"
+                    class="inline-select"
+                  >
+                    <el-option label="🟢 普通" value="MEDIUM" />
+                    <el-option label="🟡 重点关注" value="HIGH" />
+                    <el-option label="🔴 紧急红线" value="URGENT" />
+                    <el-option label="⚪ 低" value="LOW" />
+                  </el-select>
+                </div>
+
+                <div class="inline-cell cell-assignee">
+                  <el-input
+                    v-model="quickRow.assignee_name"
+                    placeholder="责任人"
+                    size="small"
+                    class="inline-input"
+                    @keyup.enter="handleAutoAddRow"
+                  />
+                </div>
+
+                <div class="inline-cell cell-due">
+                  <el-date-picker
+                    v-model="quickRow.due_date"
+                    type="date"
+                    value-format="YYYY-MM-DD"
+                    placeholder="截止日期"
+                    size="small"
+                    class="inline-date-picker"
+                  />
+                </div>
+
+                <div class="inline-cell cell-actions">
+                  <el-button
+                    type="primary"
+                    size="small"
+                    :loading="quickAdding"
+                    class="save-btn"
+                    @click="handleAutoAddRow"
+                  >
+                    保存 ↵
+                  </el-button>
+                  <el-button
+                    size="small"
+                    class="cancel-btn"
+                    @click="cancelInlineAdd"
+                  >
+                    收起
+                  </el-button>
+                </div>
+              </div>
+            </div>
           </template>
         </DataTable>
       </div>
@@ -361,7 +381,7 @@
                 draggable="true"
                 @dragstart="handleKanbanDragStart($event, item)"
                 @dragend="handleKanbanDragEnd"
-                @click="openDetailDrawer(item.id)"
+                @click="openEditModal(item)"
               >
                 <div class="card-top-row">
                   <span class="card-code">{{ item.task_code }}</span>
@@ -411,7 +431,7 @@
                 draggable="true"
                 @dragstart="handleKanbanDragStart($event, item)"
                 @dragend="handleKanbanDragEnd"
-                @click="openDetailDrawer(item.id)"
+                @click="openEditModal(item)"
               >
                 <div class="card-top-row">
                   <span class="card-code">{{ item.task_code }}</span>
@@ -461,7 +481,7 @@
                 draggable="true"
                 @dragstart="handleKanbanDragStart($event, item)"
                 @dragend="handleKanbanDragEnd"
-                @click="openDetailDrawer(item.id)"
+                @click="openEditModal(item)"
               >
                 <div class="card-top-row">
                   <span class="card-code">{{ item.task_code }}</span>
@@ -511,7 +531,7 @@
                 draggable="true"
                 @dragstart="handleKanbanDragStart($event, item)"
                 @dragend="handleKanbanDragEnd"
-                @click="openDetailDrawer(item.id)"
+                @click="openEditModal(item)"
               >
                 <div class="card-top-row">
                   <span class="card-code">{{ item.task_code }}</span>
@@ -547,14 +567,7 @@
       </div>
     </main>
 
-    <!-- 4. 任务侧拉详情抽屉 (100% 复用已有 DrawerContainer & Tiptap) -->
-    <TaskDetailDrawer
-      v-model="detailDrawerVisible"
-      :task-id="activeTaskId"
-      @refresh="fetchData"
-    />
-
-    <!-- 5. 新建 / 编辑任务对话框 -->
+    <!-- 4. 统一 70% 宽幅可拖拽协同任务抽屉 (兼顾查看与编辑，无多余冗余弹窗) -->
     <TaskEditModal
       v-model="editModalVisible"
       :task="editingTask"
@@ -571,7 +584,6 @@ import { ElMessage } from 'element-plus'
 import DataTable from '@/components/common/DataTable/index.vue'
 import type { TableColumn, CellChangeEvent } from '@/components/common/DataTable/types'
 import { taskApi } from '@/api/task'
-import TaskDetailDrawer from './components/TaskDetailDrawer.vue'
 import TaskEditModal from './components/TaskEditModal.vue'
 import TaskCalendarView from './components/TaskCalendarView.vue'
 import TaskTopologyView from './components/TaskTopologyView.vue'
@@ -584,8 +596,9 @@ const loading = ref(false)
 const tableData = ref<TaskItem[]>([])
 const allTasksList = ref<TaskItem[]>([])
 
-// 快捷自动加行状态
-const quickTitleInputRef = ref<any>(null)
+// 快捷自动加行状态 (飞书多维表格风格：默认就绪于最后一行底部)
+const isAddingInlineRow = ref(true)
+const inlineTitleInputRef = ref<any>(null)
 const quickAdding = ref(false)
 const quickRow = reactive({
   title: '',
@@ -595,6 +608,18 @@ const quickRow = reactive({
   priority: 'MEDIUM' as TaskPriority,
   status: 'TODO' as TaskStatus
 })
+
+const startInlineAdd = () => {
+  isAddingInlineRow.value = true
+  nextTick(() => {
+    inlineTitleInputRef.value?.focus()
+  })
+}
+
+const cancelInlineAdd = () => {
+  isAddingInlineRow.value = false
+  quickRow.title = ''
+}
 
 // 看板拖拽状态
 const draggingKanbanTask = ref<TaskItem | null>(null)
@@ -653,8 +678,7 @@ const columns: TableColumn[] = [
   { prop: 'assignee_name', label: '责任人', width: '120px', sortable: true, editable: true },
   { prop: 'schedule', label: '计划截止日', width: '130px', align: 'center', sortable: true },
   { prop: 'status', label: '流转状态', width: '120px', align: 'center' },
-  { prop: 'attachment_count', label: '附件', width: '75px', align: 'center' },
-  { prop: 'action', label: '操作', width: '150px', fixed: 'right' }
+  { prop: 'attachment_count', label: '附件', width: '75px', align: 'center' }
 ]
 
 // 看板分类计算
@@ -671,22 +695,29 @@ const kanbanTasks = computed(() => {
 const fetchData = async () => {
   try {
     loading.value = true
+    const queryParams = {
+      keyword: filters.keyword,
+      source_type: filters.source_type,
+      status: filters.status,
+      priority: filters.priority,
+      due_filter: filters.due_filter as any,
+      page: pagination.page,
+      page_size: pagination.pageSize
+    }
+    console.log('[TaskCenter] fetching tasks with queryParams:', queryParams)
+
     const [statsRes, listRes] = await Promise.all([
       taskApi.getStats(),
-      taskApi.listTasks({
-        keyword: filters.keyword,
-        source_type: filters.source_type,
-        status: filters.status,
-        priority: filters.priority,
-        due_filter: filters.due_filter as any,
-        page: pagination.page,
-        page_size: pagination.pageSize
-      })
+      taskApi.listTasks(queryParams)
     ])
 
+    console.log('[TaskCenter] statsRes:', statsRes, 'listRes:', listRes)
+
     Object.assign(stats, statsRes)
-    tableData.value = listRes.items
-    pagination.total = listRes.total
+    tableData.value = listRes?.items || []
+    pagination.total = listRes?.total || 0
+
+    console.log('[TaskCenter] after assignment, tableData count:', tableData.value.length, 'pagination.total:', pagination.total)
 
     // 同时拉取全部列表填充看板 (上限 200)
     const allRes = await taskApi.listTasks({
@@ -722,9 +753,16 @@ const handleReset = () => {
   fetchData()
 }
 
+const handleSourceChange = () => {
+  if (filters.source_type && filters.source_type !== 'ALL') {
+    quickRow.source_type = filters.source_type as TaskSourceType
+  }
+  handleSearch()
+}
+
 const setSourceType = (type: string) => {
   filters.source_type = type
-  handleSearch()
+  handleSourceChange()
 }
 
 const quickFilterByStatus = (statusStr: string) => {
@@ -805,12 +843,12 @@ const handleCalendarDateUpdate = async (id: number, dateStr: string) => {
   }
 }
 
-// 快速自动加行处理 (回车即刻自动生成并就绪下一行)
+// 快速自动加行处理 (回车即刻自动生成并就绪下一行，实现飞书多维表格行底连续录入体验)
 const handleAutoAddRow = async () => {
   const title = quickRow.title.trim()
   if (!title) {
     ElMessage.warning('请输入任务标题')
-    quickTitleInputRef.value?.focus()
+    inlineTitleInputRef.value?.focus()
     return
   }
 
@@ -822,13 +860,15 @@ const handleAutoAddRow = async () => {
       assignee_name: quickRow.assignee_name.trim() || undefined,
       due_date: quickRow.due_date || undefined,
       priority: quickRow.priority,
-      status: quickRow.status
+      status: quickRow.status || 'TODO'
     })
     ElMessage.success('已新建任务，自动就绪下一行')
     quickRow.title = ''
     await fetchData()
+    // 保持行底激活态并再次自动对焦输入框，支持像飞书一样连续回车极速加行
+    isAddingInlineRow.value = true
     nextTick(() => {
-      quickTitleInputRef.value?.focus()
+      inlineTitleInputRef.value?.focus()
     })
   } catch (err: any) {
     ElMessage.error(`添加行失败: ${err.message || '网络异常'}`)
@@ -871,10 +911,16 @@ const handleDeleteTask = async (id: number) => {
   }
 }
 
-// 弹窗与抽屉控制
+// 统一的弹窗与抽屉控制 (合并详情与编辑为单一 70% 可拖拽抽屉)
 const openDetailDrawer = (id: number) => {
-  activeTaskId.value = id
-  detailDrawerVisible.value = true
+  const found = allTasksList.value.find(t => t.id === id) || tableData.value.find(t => t.id === id)
+  if (found) {
+    openEditModal(found)
+  } else {
+    taskApi.getTask(id).then(t => openEditModal(t)).catch(() => {
+      openEditModal({ id } as any)
+    })
+  }
 }
 
 const openCreateModal = () => {
@@ -1051,52 +1097,23 @@ const getPriorityTagType = (p: string) => {
   gap: 8px;
 }
 
-.filter-prefix {
-  font-size: 12px;
-  font-weight: 600;
-  color: #64748b;
-  flex-shrink: 0;
-}
-
-.chip-group {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
-}
-
-.filter-chip {
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  color: #475569;
-  font-size: 11.5px;
-  padding: 2px 10px;
-  border-radius: 4px;
-  cursor: pointer;
-  transition: all 0.12s ease;
-}
-.filter-chip:hover {
-  background: #eff6ff;
-  color: #2563eb;
-  border-color: #bfdbfe;
-}
-.filter-chip.active {
-  background: #2563eb;
-  color: #ffffff;
-  border-color: #2563eb;
-  font-weight: 600;
-}
-
 .search-row {
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-wrap: wrap;
 }
 .search-input {
-  width: 280px;
+  width: 260px;
 }
 .filter-select {
-  width: 135px;
+  width: 130px;
+}
+.filter-select.source-select {
+  width: 145px;
+}
+.filter-select.due-select {
+  width: 130px;
 }
 
 /* 主内容视图容器 */
@@ -1112,7 +1129,13 @@ const getPriorityTagType = (p: string) => {
 }
 
 .grid-view-wrapper {
+  flex: 1;
+  min-height: 0;
   height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 8px 12px 12px 12px;
 }
 
 /* Grid 单元格定制 */
@@ -1393,62 +1416,154 @@ const getPriorityTagType = (p: string) => {
   margin-top: 4px;
 }
 
-/* ⚡ 快速连续自动加行条 */
-.quick-add-row-strip {
+/* 飞书多维表格风格：表格底部行内极速录入区 */
+.feishu-table-append-zone {
+  width: 100%;
+  border-top: 1px solid var(--el-border-color-lighter, #ebeef5);
+  background: #ffffff;
+}
+
+.feishu-add-row-placeholder {
+  display: flex;
+  align-items: center;
+  height: 42px;
+  padding: 0 16px;
+  cursor: pointer;
+  user-select: none;
+  color: #64748b;
+  font-size: 13px;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  outline: none;
+}
+
+.feishu-add-row-placeholder:hover,
+.feishu-add-row-placeholder:focus-visible {
+  background: #f0f7ff;
+  color: #2563eb;
+}
+
+.add-btn-inner {
   display: flex;
   align-items: center;
   gap: 8px;
-  background: #ffffff;
-  padding: 8px 12px;
-  border-radius: 6px;
-  border: 1px solid #e2e8f0;
-  margin-bottom: 8px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
 }
 
-.strip-badge {
+.add-btn-inner .add-icon {
+  font-size: 14px;
+  font-weight: 700;
+  transition: transform 0.2s ease;
+}
+
+.feishu-add-row-placeholder:hover .add-icon {
+  transform: rotate(90deg) scale(1.1);
+}
+
+.add-btn-inner .add-title {
+  font-weight: 500;
+}
+
+.add-btn-inner .add-tip {
+  font-size: 12px;
+  color: #94a3b8;
+  margin-left: 8px;
+}
+
+/* 激活态：行内直接录入行 */
+.feishu-inline-editor-row {
   display: flex;
   align-items: center;
-  gap: 4px;
-  font-size: 12px;
-  font-weight: 600;
-  color: #1e293b;
+  min-height: 44px;
+  padding: 6px 12px;
+  gap: 8px;
+  background: #f8fafc;
+  border-left: 3px solid #2563eb;
+  animation: feishuFadeIn 0.18s cubic-bezier(0, 0, 0.2, 1);
+}
+
+@keyframes feishuFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.feishu-inline-editor-row .inline-cell {
+  display: flex;
+  align-items: center;
+}
+
+.feishu-inline-editor-row .cell-code {
+  width: 75px;
   flex-shrink: 0;
-  padding-right: 4px;
-  border-right: 1px solid #e2e8f0;
+  justify-content: center;
 }
 
-.strip-icon {
-  color: #f59e0b;
+.new-row-badge {
+  font-size: 11px;
+  font-weight: 600;
+  color: #2563eb;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  padding: 2px 7px;
+  border-radius: 4px;
+  white-space: nowrap;
 }
 
-.quick-input.title-input {
+.feishu-inline-editor-row .cell-title {
   flex: 1;
-  min-width: 200px;
+  min-width: 240px;
 }
 
-.quick-input.source-select {
+.feishu-inline-editor-row .cell-source {
   width: 130px;
   flex-shrink: 0;
 }
 
-.quick-input.user-input {
-  width: 100px;
-  flex-shrink: 0;
-}
-
-.quick-input.date-picker {
-  width: 135px;
-  flex-shrink: 0;
-}
-
-.quick-input.prio-select {
+.feishu-inline-editor-row .cell-priority {
   width: 115px;
   flex-shrink: 0;
 }
 
-.quick-add-btn {
+.feishu-inline-editor-row .cell-assignee {
+  width: 100px;
   flex-shrink: 0;
+}
+
+.feishu-inline-editor-row .cell-due {
+  width: 135px;
+  flex-shrink: 0;
+}
+
+.feishu-inline-editor-row .cell-actions {
+  width: 125px;
+  flex-shrink: 0;
+  display: flex;
+  gap: 6px;
+}
+
+.enter-badge {
+  font-size: 11px;
+  color: #94a3b8;
+  background: #f1f5f9;
+  padding: 1px 5px;
+  border-radius: 4px;
+  border: 1px solid #e2e8f0;
+  font-family: inherit;
+  user-select: none;
+}
+
+.feishu-inline-editor-row .save-btn {
   font-weight: 500;
+}
+
+.feishu-inline-editor-row .cancel-btn {
+  color: #64748b;
+}
+.feishu-inline-editor-row .cancel-btn:hover {
+  color: #0f172a;
 }
 </style>

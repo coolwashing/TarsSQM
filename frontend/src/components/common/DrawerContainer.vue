@@ -1,13 +1,25 @@
 <template>
   <el-drawer
     v-model="internalVisible"
-    :size="width"
+    :size="drawerSize"
     :title="title"
+    direction="rtl"
     :before-close="handleBeforeClose"
     :destroy-on-close="destroyOnClose"
     class="custom-70-drawer"
     append-to-body
   >
+    <!-- 左侧可拖拽手柄 (支持水平拖拽改变抽屉宽度) -->
+    <div
+      v-if="resizable"
+      class="drawer-resize-handle"
+      :class="{ 'is-resizing': isResizing }"
+      title="按住向左/向右拖拽调整抽屉宽度"
+      @mousedown.prevent.stop="handleMouseDownResize"
+    >
+      <div class="resize-handle-pill" />
+    </div>
+
     <template #header>
       <div class="drawer-header-content">
         <div class="header-main">
@@ -45,7 +57,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 
 interface DrawerProps {
   modelValue: boolean
@@ -60,6 +72,8 @@ interface DrawerProps {
   destroyOnClose?: boolean
   beforeCloseHandler?: (done: (cancel?: boolean) => void) => void
   bodyClass?: string
+  resizable?: boolean
+  minWidth?: number
 }
 
 const props = withDefaults(defineProps<DrawerProps>(), {
@@ -70,7 +84,9 @@ const props = withDefaults(defineProps<DrawerProps>(), {
   submitText: '保存并提交',
   cancelText: '取消退出',
   destroyOnClose: true,
-  bodyClass: ''
+  bodyClass: '',
+  resizable: true,
+  minWidth: 460
 })
 
 const emit = defineEmits<{
@@ -83,6 +99,63 @@ const internalVisible = computed({
   get: () => props.modelValue,
   set: (val: boolean) => emit('update:modelValue', val)
 })
+
+const drawerSize = ref<string>(props.width || '70%')
+const isResizing = ref(false)
+
+// 响应外部 width 属性变化
+watch(() => props.width, (val) => {
+  if (!isResizing.value && val) {
+    drawerSize.value = val
+  }
+})
+
+// 监听抽屉开启，保证初始大小有效
+watch(() => props.modelValue, (isOpen) => {
+  if (isOpen && !drawerSize.value) {
+    drawerSize.value = props.width || '70%'
+  }
+})
+
+let startX = 0
+let startWidth = 0
+
+const handleMouseDownResize = (e: MouseEvent) => {
+  if (!props.resizable) return
+  isResizing.value = true
+  startX = e.clientX
+
+  // 获取抽屉 DOM 当前实际像素宽度
+  const drawerEl = document.querySelector('.custom-70-drawer.el-drawer') as HTMLElement
+  if (drawerEl) {
+    startWidth = drawerEl.offsetWidth
+  } else {
+    startWidth = window.innerWidth * 0.7
+  }
+
+  document.body.style.cursor = 'ew-resize'
+  document.body.style.userSelect = 'none'
+
+  const onMouseMove = (moveEvent: MouseEvent) => {
+    // 抽屉位于屏幕右侧向左展开，向左移(moveEvent.clientX < startX)宽度变大
+    const dx = startX - moveEvent.clientX
+    const minW = props.minWidth || 460
+    const maxW = Math.round(window.innerWidth * 0.96)
+    const newWidth = Math.min(Math.max(startWidth + dx, minW), maxW)
+    drawerSize.value = `${newWidth}px`
+  }
+
+  const onMouseUp = () => {
+    isResizing.value = false
+    document.body.style.cursor = ''
+    document.body.style.userSelect = ''
+    window.removeEventListener('mousemove', onMouseMove)
+    window.removeEventListener('mouseup', onMouseUp)
+  }
+
+  window.addEventListener('mousemove', onMouseMove)
+  window.addEventListener('mouseup', onMouseUp)
+}
 
 const handleBeforeClose = (done: () => void) => {
   if (props.beforeCloseHandler) {
@@ -111,15 +184,23 @@ const handleSubmit = () => {
 </script>
 
 <style>
-/* 全局精确作用于 70% 宽幅抽屉，击穿 append-to-body 样式隔离，消除多余 60px 间隙 */
+/* 全局精确作用于 70% 宽幅抽屉，击穿 append-to-body 样式隔离 */
 .custom-70-drawer.el-drawer {
   --el-drawer-padding-primary: 0px !important;
+  position: absolute !important;
+  right: 0 !important;
+  top: 0 !important;
+  bottom: 0 !important;
+  height: 100% !important;
+  margin: 0 !important;
+  overflow: visible !important;
 }
 
 .custom-70-drawer .el-drawer__header {
   margin-bottom: 0 !important;
   padding: 10px 18px !important;
   border-bottom: 1px solid #e2e8f0 !important;
+  background-color: #ffffff !important;
 }
 
 .custom-70-drawer .el-drawer__body {
@@ -134,6 +215,42 @@ const handleSubmit = () => {
   padding: 8px 18px !important;
   border-top: 1px solid #e2e8f0 !important;
   background-color: #fafbfc !important;
+}
+
+/* 左侧拖拽调整把手 */
+.drawer-resize-handle {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 10px;
+  cursor: ew-resize;
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.15s ease;
+  user-select: none;
+}
+
+.drawer-resize-handle:hover,
+.drawer-resize-handle.is-resizing {
+  background-color: rgba(37, 99, 235, 0.12);
+}
+
+.resize-handle-pill {
+  width: 3px;
+  height: 48px;
+  background-color: #cbd5e1;
+  border-radius: 2px;
+  transition: all 0.15s ease;
+}
+
+.drawer-resize-handle:hover .resize-handle-pill,
+.drawer-resize-handle.is-resizing .resize-handle-pill {
+  background-color: #2563eb;
+  height: 64px;
+  width: 4px;
 }
 </style>
 
