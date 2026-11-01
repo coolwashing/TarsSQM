@@ -1,4 +1,4 @@
-from typing import Optional, List
+from typing import Optional, List, Literal
 from datetime import datetime
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -14,6 +14,9 @@ class KbDocTreeNode(BaseModel):
     is_folder: bool = False
     is_favorite: bool = False
     sort_order: int = 0
+    type: str = "doc"
+    target_id: Optional[int] = None
+    file_url: Optional[str] = None
     children: List["KbDocTreeNode"] = []
 
     model_config = ConfigDict(from_attributes=True)
@@ -68,7 +71,7 @@ class KbDocMove(BaseModel):
     拖拽调整节点位置与顺序
     """
     target_parent_id: Optional[int] = None
-    sort_order: Optional[int] = 0
+    sort_order: Optional[int] = None
 
 
 class KbDocSearchResult(BaseModel):
@@ -80,6 +83,8 @@ class KbDocSearchResult(BaseModel):
     icon: str
     snippet: str
     updated_at: datetime
+    location: str = "文档正文"
+    kind: str = "doc"
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -132,6 +137,12 @@ class KbExplorerItem(BaseModel):
     author: Optional[str] = None
     content_html: Optional[str] = None
     content_text: Optional[str] = None
+    file_url: Optional[str] = None
+    file_size: Optional[int] = None
+    attachment_id: Optional[int] = None
+    index_status: Optional[str] = None
+    index_message: Optional[str] = None
+    chunk_count: int = 0
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -173,6 +184,8 @@ class KbItemRename(BaseModel):
 class KbItemMove(BaseModel):
     id: int
     target_folder_id: Optional[int] = None
+    reference_id: Optional[int] = None
+    placement: Literal["inside", "before", "after"] = "inside"
 
 
 class KbItemIconUpdate(BaseModel):

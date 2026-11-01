@@ -117,7 +117,8 @@ def save_db_config_to_env(host: str, port: int, user: str, password: str, db_nam
     with open(ENV_FILE, "w", encoding="utf-8") as f:
         f.writelines(new_lines)
 
-    # 重新载入全局 settings 实例
-    global settings
-    settings = Settings()
+    # 保持 settings 对象不变，让已导入它的模块也能读到新配置。
+    refreshed_settings = Settings()
+    for field_name in Settings.model_fields:
+        setattr(settings, field_name, getattr(refreshed_settings, field_name))
     return True
