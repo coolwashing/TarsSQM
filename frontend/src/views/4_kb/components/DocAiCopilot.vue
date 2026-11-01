@@ -201,6 +201,15 @@
               <div class="action-right">
                 <button
                   type="button"
+                  class="action-btn pull-ide-btn"
+                  @click="syncIdePreview(false)"
+                  title="从后端检查并拉取 IDE 推送的最新规程草稿进入审查"
+                >
+                  <el-icon><Refresh /></el-icon>
+                  <span>同步 IDE 推送</span>
+                </button>
+                <button
+                  type="button"
                   class="action-btn paste-ide-btn"
                   @click="handlePasteIdeResult"
                   title="从剪贴板读取 IDE 中生成的内容进入下方审查与就地编辑"
@@ -324,7 +333,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, nextTick } from 'vue'
+import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { Document, CopyDocument, Download, Refresh, Star, Close, Edit, Plus, Check, EditPen, Location, Delete } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { BeaconItem } from '@/components/editor/TiptapEditor.vue'
@@ -811,6 +820,58 @@ const deletePreset = async (presetId: string, presetName?: string) => {
   } catch {}
 }
 
+let idePollTimer: any = null
+let lastSyncedTimestamp: number | null = null
+
+// 一键拉取 IDE 生成的审查内容 (支持静默轮询与主动点击)
+const syncIdePreview = async (silent = false) => {
+  try {
+    const res = await fetch(`/api/kb/copilot/preview?doc_id=${props.docId || 'default'}`)
+    if (res.ok) {
+      const data = await res.json()
+      if (data && data.html) {
+        const isNewer = data.updated_at && (lastSyncedTimestamp === null || data.updated_at > lastSyncedTimestamp)
+        if (isNewer || !silent || !generatedContent.value) {
+          if (data.updated_at) {
+            lastSyncedTimestamp = data.updated_at
+          }
+          if (generatedContent.value !== data.html) {
+            generatedContent.value = data.html
+            if (silent) {
+              ElMessage.success('⚡ 已自动接收到 IDE 推送的最新规程！请在下方审查')
+            }
+          }
+          if (!silent) {
+            ElMessage.success('已成功同步 IDE 生成的规程！请在下方预览审查，满意后点击「确认写入正文」')
+          }
+          return true
+        }
+      }
+    }
+  } catch {}
+  if (!silent) {
+    ElMessage.info('暂未检测到 IDE 推送的审查内容，您也可以点击左下角「粘贴 IDE 内容」')
+  }
+  return false
+}
+
+// 开启 2.5 秒轻量静默轮询 (只要面板打开就实时监听 IDE 推送)
+const startIdePoll = () => {
+  stopIdePoll()
+  syncIdePreview(true)
+  idePollTimer = setInterval(() => {
+    if (!dialogVisible.value || generating.value) return
+    syncIdePreview(true)
+  }, 2500)
+}
+
+const stopIdePoll = () => {
+  if (idePollTimer) {
+    clearInterval(idePollTimer)
+    idePollTimer = null
+  }
+}
+
 watch(
   () => [props.modelValue, props.initialTarget, props.beacons] as const,
   ([visible, target, beacons]) => {
@@ -852,12 +913,11 @@ watch(
           promptText.value = '根据当前质量知识库标准，帮我写一份现场检验作业指导书(SOP)'
         }
       }
-      // 自动检查是否有 IDE 推送给当前文档的审查内容
-      if (!generatedContent.value) {
-        syncIdePreview(true)
-      }
+      // 启动对 IDE 推送的实时轮询监听 (2.5 秒静默检测)
+      startIdePoll()
     } else {
       generating.value = false
+      stopIdePoll()
     }
   },
   { immediate: true, deep: true }
@@ -865,6 +925,10 @@ watch(
 
 onMounted(() => {
   fetchPromptPresets()
+})
+
+onBeforeUnmount(() => {
+  stopIdePoll()
 })
 
 // 发起流式生成
@@ -1033,27 +1097,6 @@ const copyPromptForIde = async () => {
     document.body.removeChild(ta)
     ElMessage.success('🚀 需求与信标已复制！请直接粘贴到 IDE 聊天框中发送')
   }
-}
-
-// 一键拉取 IDE 生成的审查内容
-const syncIdePreview = async (silent = false) => {
-  try {
-    const res = await fetch(`/api/kb/copilot/preview?doc_id=${props.docId || 'default'}`)
-    if (res.ok) {
-      const data = await res.json()
-      if (data && data.html) {
-        generatedContent.value = data.html
-        if (!silent) {
-          ElMessage.success('已成功同步 IDE 生成的规程！请在下方预览审查，满意后点击「确认填入」')
-        }
-        return true
-      }
-    }
-  } catch {}
-  if (!silent) {
-    ElMessage.info('暂未检测到 IDE 推送的审查内容，您也可以点击左下角「粘贴 IDE 内容」')
-  }
-  return false
 }
 
 // 粘贴 IDE 内容并载入审查

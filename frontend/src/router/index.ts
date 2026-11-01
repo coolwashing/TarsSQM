@@ -63,6 +63,13 @@ const routes: RouteRecordRaw[] = [
     name: 'DatabaseStudio',
     component: () => import('@/views/5_dev/DatabaseStudio.vue'),
     meta: { title: '数据库工作台' }
+  },
+  // 协同任务中心模块
+  {
+    path: '/tasks',
+    name: 'TaskCenter',
+    component: () => import('@/views/task/TaskCenter.vue'),
+    meta: { title: '协同任务中心' }
   }
 ]
 

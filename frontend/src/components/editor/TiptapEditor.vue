@@ -192,8 +192,41 @@
         </button>
       </div>
 
-      <!-- 右侧功能组：宽屏切换 (信标 1) + 章节大纲 (信标 2: 短标签) -->
+      <!-- 右侧功能组：Word 导入/导出 + 宽屏切换 (信标 1) + 章节大纲 (信标 2: 短标签) -->
       <div class="toolbar-group toolbar-right-group">
+        <!-- 隐藏的 Word 文件上传 input -->
+        <input
+          type="file"
+          ref="wordFileInputRef"
+          accept=".docx"
+          style="display: none"
+          @change="handleWordFileChange"
+        />
+
+        <button
+          type="button"
+          class="t-btn docx-btn"
+          :disabled="isImportingWord"
+          @click="triggerWordImport"
+          title="导入 Word (.docx) 文件到当前文档"
+        >
+          <span class="docx-icon">📤</span>
+          <span class="docx-txt">{{ isImportingWord ? '导入中…' : '导入 Word' }}</span>
+        </button>
+
+        <button
+          type="button"
+          class="t-btn docx-btn"
+          :disabled="isExportingWord"
+          @click="triggerWordExport"
+          title="将当前规程导出为标准 Word (.docx) 文件"
+        >
+          <span class="docx-icon">📥</span>
+          <span class="docx-txt">{{ isExportingWord ? '导出中…' : '导出 Word' }}</span>
+        </button>
+
+        <div class="t-sep mini-sep"></div>
+
         <!-- 宽屏显示切换 icon (信标 1) -->
         <button
           type="button"
@@ -229,10 +262,11 @@
 
     <!-- Tiptap 编辑区核心 DOM 与右侧章节大纲树 -->
     <div class="editor-main-layout">
-      <!-- 选区悬浮气泡菜单 (划选即刻唤出 AI 智写与快速排版) -->
+      <!-- 选区悬浮气泡菜单 (仅划词选中文本时浮出，彻底杜绝常驻遮挡) -->
       <bubble-menu
         v-if="editor && !readonly && showAi"
         :editor="editor"
+        :should-show="shouldShowBubbleMenu"
         :options="{ strategy: 'fixed', placement: 'top' }"
         class="tiptap-bubble-menu"
       >
@@ -360,7 +394,8 @@
               class="outline-tree-item"
               :class="[`level-${h.level}`, { active: activeHeadingId === h.id }]"
               @click="selectHeadingSection(h)"
-              :title="`点击定位并圈选【${h.text}】整章对象 (问 2)`"
+              @contextmenu.prevent="openOutlineContextMenu(h, $event)"
+              :title="`点击定位【${h.text}】(右键呼出快捷复制与操作)`"
             >
               <span class="level-indicator"></span>
               <span class="outline-text" :title="h.text">{{ h.text }}</span>
@@ -381,15 +416,61 @@
           </div>
         </aside>
       </transition>
+
+      <!-- 大纲右键快捷复制与操作浮层 (Teleport 挂载到 body) -->
+      <teleport to="body">
+        <transition name="context-menu-fade">
+          <div
+            v-if="outlineContextMenu.visible"
+            class="sqm-outline-context-menu"
+            :style="{ top: `${outlineContextMenu.y}px`, left: `${outlineContextMenu.x}px` }"
+            @click.stop
+          >
+            <div class="context-menu-header">
+              <span class="header-icon">📑</span>
+              <span class="header-title" :title="outlineContextMenu.target?.text">
+                {{ outlineContextMenu.target?.text }}
+              </span>
+            </div>
+            <div class="context-menu-item" @click="handleCopySectionMarkdown">
+              <span class="item-icon">📋</span>
+              <span class="item-label">复制本章 Markdown</span>
+            </div>
+            <div class="context-menu-item" @click="handleCopySectionText">
+              <span class="item-icon">📑</span>
+              <span class="item-label">复制本章纯文本</span>
+            </div>
+            <div class="context-menu-item" @click="handleCopyFullDoc">
+              <span class="item-icon">📄</span>
+              <span class="item-label">复制全篇内容</span>
+            </div>
+            <div class="context-menu-sep"></div>
+            <div class="context-menu-item ai-action" @click="handleAiSectionFromMenu">
+              <span class="item-icon">✨</span>
+              <span class="item-label">AI 靶向优化本章</span>
+            </div>
+          </div>
+        </transition>
+      </teleport>
+
+      <!-- 原生免下载图片全屏灯箱 (Lightbox) -->
+      <el-image-viewer
+        v-if="lightboxVisible"
+        :url-list="lightboxUrls"
+        :initial-index="lightboxIndex"
+        @close="lightboxVisible = false"
+      />
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, watch, onBeforeUnmount, onMounted } from 'vue'
-import { useEditor, EditorContent } from '@tiptap/vue-3'
+import { useEditor, EditorContent, VueNodeViewRenderer } from '@tiptap/vue-3'
 import { BubbleMenu } from '@tiptap/vue-3/menus'
 import StarterKit from '@tiptap/starter-kit'
+import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight'
+import { common, createLowlight } from 'lowlight'
 import { Table } from '@tiptap/extension-table'
 import { TableRow } from '@tiptap/extension-table-row'
 import { TableHeader } from '@tiptap/extension-table-header'
@@ -398,6 +479,39 @@ import { TaskList } from '@tiptap/extension-task-list'
 import { TaskItem } from '@tiptap/extension-task-item'
 import { Image } from '@tiptap/extension-image'
 import { Placeholder } from '@tiptap/extension-placeholder'
+import { ElImageViewer, ElMessage } from 'element-plus'
+import CodeBlockComponent from './CodeBlockComponent.vue'
+import ResizableImageComponent from './ResizableImageComponent.vue'
+import { importWordToHtml, exportHtmlToWord } from '@/utils/wordHelper'
+
+const lowlight = createLowlight(common)
+
+// 扩展 Tiptap Image 节点以支持等比拖拽缩放与飞书级排版
+const CustomImage = Image.extend({
+  addAttributes() {
+    return {
+      ...this.parent?.(),
+      width: {
+        default: '100%',
+        parseHTML: element => element.getAttribute('width') || element.style.width || '100%',
+        renderHTML: attributes => ({
+          width: attributes.width,
+          style: `width: ${attributes.width}; max-width: 100%;`
+        })
+      },
+      align: {
+        default: 'center',
+        parseHTML: element => element.getAttribute('data-align') || 'center',
+        renderHTML: attributes => ({
+          'data-align': attributes.align
+        })
+      }
+    }
+  },
+  addNodeView() {
+    return VueNodeViewRenderer(ResizableImageComponent)
+  }
+})
 
 export interface BeaconItem {
   id: string
@@ -428,6 +542,7 @@ const props = withDefaults(
     showAi?: boolean
     isWide?: boolean
     aiActive?: boolean
+    docTitle?: string
   }>(),
   {
     modelValue: '',
@@ -435,7 +550,8 @@ const props = withDefaults(
     placeholder: '输入质量标准内容，按回车换行，支持直接粘贴质检截图或插入 CTQ 公差表格...',
     showAi: true,
     isWide: false,
-    aiActive: false
+    aiActive: false,
+    docTitle: ''
   }
 )
 
@@ -873,18 +989,177 @@ const handleContentMouseLeave = () => {
   clearDomHover()
 }
 
-// 点击正文：可直接进行就地文字/表格编辑，支持 Ctrl/Shift 多选
+const lightboxVisible = ref(false)
+const lightboxUrls = ref<string[]>([])
+const lightboxIndex = ref(0)
+
+// 点击正文：可直接进行就地文字/表格编辑，仅支持 Ctrl/Shift 显式圈选信标
 const handleContentClick = (e: MouseEvent) => {
   if (!editor.value?.view?.dom) return
   const target = e.target as HTMLElement
-  const pmDom = editor.value.view.dom as HTMLElement
-  const topBlock = target.closest('.ProseMirror > *') as HTMLElement
-  if (topBlock && pmDom.contains(topBlock)) {
-    const idx = Array.from(pmDom.children).indexOf(topBlock)
-    if (idx >= 0 && idx < gutterBlocks.value.length) {
-      const block = gutterBlocks.value[idx]
-      handleBlockSelect(block, e)
+
+  // 仅在用户按住 Ctrl 或 Shift 时才在正文执行信标联动圈选
+  if (e.ctrlKey || e.metaKey || e.shiftKey) {
+    const pmDom = editor.value.view.dom as HTMLElement
+    const topBlock = target.closest('.ProseMirror > *') as HTMLElement
+    if (topBlock && pmDom.contains(topBlock)) {
+      const idx = Array.from(pmDom.children).indexOf(topBlock)
+      if (idx >= 0 && idx < gutterBlocks.value.length) {
+        const block = gutterBlocks.value[idx]
+        handleBlockSelect(block, e)
+      }
     }
+  } else {
+    // 普通单击：清空已选行标高亮，让用户自然键入与打字，绝不强行全选整段
+    if (selectedBlockIds.value.size > 0) {
+      selectedBlockIds.value = new Set()
+      syncDomSelectionClasses()
+      emitSelectedBeacons()
+    }
+  }
+}
+
+// 严格的划词悬浮菜单显隐判定守卫 (彻底解决遮挡视线问题)
+const shouldShowBubbleMenu = ({ editor: ed, view, state, from, to }: any) => {
+  if (!ed || !ed.isEditable) return false
+  if (!view || !view.hasFocus()) return false
+
+  const { selection } = state
+  if (!selection || selection.empty || from === to) return false
+
+  // 处于代码块、图片等已有专有操作条的复杂节点时，不弹出文字排版气泡
+  if (ed.isActive('codeBlock') || ed.isActive('image')) {
+    return false
+  }
+
+  // 必须选中有实际文字内容
+  const selectedText = state.doc.textBetween(from, to, ' ').trim()
+  return selectedText.length > 0
+}
+
+// 大纲右键快捷菜单状态
+const outlineContextMenu = ref<{
+  visible: boolean
+  x: number
+  y: number
+  target: OutlineHeadingItem | null
+}>({
+  visible: false,
+  x: 0,
+  y: 0,
+  target: null
+})
+
+const closeOutlineContextMenu = () => {
+  outlineContextMenu.value.visible = false
+}
+
+const openOutlineContextMenu = (h: OutlineHeadingItem, e: MouseEvent) => {
+  outlineContextMenu.value = {
+    visible: true,
+    x: e.clientX,
+    y: e.clientY,
+    target: h
+  }
+}
+
+// 复制本章节 Markdown
+const handleCopySectionMarkdown = async () => {
+  if (!outlineContextMenu.value.target || !editor.value) return
+  const h = outlineContextMenu.value.target
+  const { doc } = editor.value.state
+  const text = doc.textBetween(h.pos, Math.min(h.endPos, doc.content.size), '\n\n')
+  const markdownText = `# ${h.text}\n\n${text}`
+  try {
+    await navigator.clipboard.writeText(markdownText)
+    ElMessage.success(`已复制章节【${h.text}】Markdown`)
+  } catch {
+    ElMessage.error('复制失败，请检查浏览器剪贴板权限')
+  }
+  closeOutlineContextMenu()
+}
+
+// 复制本章节纯文本
+const handleCopySectionText = async () => {
+  if (!outlineContextMenu.value.target || !editor.value) return
+  const h = outlineContextMenu.value.target
+  const { doc } = editor.value.state
+  const text = doc.textBetween(h.pos, Math.min(h.endPos, doc.content.size), '\n')
+  try {
+    await navigator.clipboard.writeText(text)
+    ElMessage.success(`已复制章节【${h.text}】纯文本`)
+  } catch {
+    ElMessage.error('复制失败，请检查浏览器剪贴板权限')
+  }
+  closeOutlineContextMenu()
+}
+
+// 复制全篇内容
+const handleCopyFullDoc = async () => {
+  if (!editor.value) return
+  const text = editor.value.getText()
+  try {
+    await navigator.clipboard.writeText(text)
+    ElMessage.success('已复制全篇规程内容到剪贴板')
+  } catch {
+    ElMessage.error('复制失败，请检查浏览器剪贴板权限')
+  }
+  closeOutlineContextMenu()
+}
+
+// 从菜单触发 AI 章节润色
+const handleAiSectionFromMenu = () => {
+  if (!outlineContextMenu.value.target) return
+  const h = outlineContextMenu.value.target
+  triggerHeadingAi(h)
+  closeOutlineContextMenu()
+}
+
+// Word 导入与导出操作
+const wordFileInputRef = ref<HTMLInputElement | null>(null)
+const isExportingWord = ref(false)
+const isImportingWord = ref(false)
+
+const triggerWordImport = () => {
+  wordFileInputRef.value?.click()
+}
+
+const handleWordFileChange = async (event: Event) => {
+  const target = event.target as HTMLInputElement
+  const file = target.files?.[0]
+  if (!file) return
+
+  try {
+    isImportingWord.value = true
+    const html = await importWordToHtml(file)
+    if (editor.value) {
+      editor.value.commands.setContent(html)
+      emit('update:modelValue', html)
+      emit('change', html)
+      refreshHeadings()
+      refreshGutterBlocks()
+      ElMessage.success(`已成功导入 Word 文档：${file.name}`)
+    }
+  } catch (err: any) {
+    ElMessage.error(`导入 Word 失败: ${err.message || '格式解析异常'}`)
+  } finally {
+    isImportingWord.value = false
+    target.value = ''
+  }
+}
+
+const triggerWordExport = async () => {
+  if (!editor.value) return
+  try {
+    isExportingWord.value = true
+    const title = props.docTitle || 'SQM质量规程文档'
+    const html = editor.value.getHTML()
+    await exportHtmlToWord(title, html)
+    ElMessage.success('已生成并开始下载 Word (.docx) 文档')
+  } catch (err: any) {
+    ElMessage.error(`导出 Word 失败: ${err.message || '生成异常'}`)
+  } finally {
+    isExportingWord.value = false
   }
 }
 
@@ -985,7 +1260,15 @@ const editor = useEditor({
   editable: !props.readonly,
   extensions: [
     StarterKit.configure({
+      codeBlock: false,
       heading: { levels: [1, 2, 3] }
+    }),
+    CodeBlockLowlight.extend({
+      addNodeView() {
+        return VueNodeViewRenderer(CodeBlockComponent)
+      }
+    }).configure({
+      lowlight
     }),
     Table.configure({
       resizable: true
@@ -997,14 +1280,38 @@ const editor = useEditor({
     TaskItem.configure({
       nested: true
     }),
-    Image.configure({
-      inline: true,
+    CustomImage.configure({
+      inline: false,
       allowBase64: true
     }),
     Placeholder.configure({
       placeholder: props.placeholder
     })
   ],
+  editorProps: {
+    handlePaste: (_view, event) => {
+      const items = event.clipboardData?.items
+      if (items) {
+        for (const item of items) {
+          if (item.type.startsWith('image/')) {
+            const file = item.getAsFile()
+            if (file) {
+              const reader = new FileReader()
+              reader.onload = (e) => {
+                const base64 = e.target?.result as string
+                if (base64 && editor.value) {
+                  editor.value.chain().focus().setImage({ src: base64 }).run()
+                }
+              }
+              reader.readAsDataURL(file)
+              return true
+            }
+          }
+        }
+      }
+      return false
+    }
+  },
   onCreate: () => {
     refreshHeadings()
     refreshGutterBlocks()
@@ -1146,9 +1453,19 @@ const handleKeydown = (e: KeyboardEvent) => {
   }
 }
 
+const onImageLightboxEvent = (e: any) => {
+  if (e.detail?.src) {
+    lightboxUrls.value = [e.detail.src]
+    lightboxIndex.value = 0
+    lightboxVisible.value = true
+  }
+}
+
 onMounted(() => {
   window.addEventListener('keydown', handleKeydown)
   window.addEventListener('resize', refreshGutterBlocks)
+  window.addEventListener('click', closeOutlineContextMenu)
+  window.addEventListener('sqm-image-lightbox', onImageLightboxEvent)
   setTimeout(() => {
     refreshGutterBlocks()
     if (editor.value?.view?.dom) {
@@ -1163,6 +1480,8 @@ onMounted(() => {
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', handleKeydown)
   window.removeEventListener('resize', refreshGutterBlocks)
+  window.removeEventListener('click', closeOutlineContextMenu)
+  window.removeEventListener('sqm-image-lightbox', onImageLightboxEvent)
   if (resizeObserver) resizeObserver.disconnect()
   editor.value?.destroy()
 })
@@ -1603,31 +1922,53 @@ defineExpose({
   border-radius: 0 4px 4px 0;
 }
 
-/* 质量公差表格核心样式 (CTQ Spec Table) */
+/* 通用清爽标准三线表与斑马纹样式 */
 :deep(.ProseMirror table) {
-  border-collapse: collapse;
+  border-collapse: separate;
+  border-spacing: 0;
   width: 100%;
-  margin: 10px 0;
+  margin: 14px 0;
+  border-radius: 8px;
   overflow: hidden;
-  border-radius: 6px;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
   font-size: 13px;
-  border: 1px solid #cbd5e1;
 }
 
 :deep(.ProseMirror th) {
-  background: #f1f5f9;
+  background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
   color: #0f172a;
   font-weight: 600;
-  padding: 6px 10px;
-  border: 1px solid #cbd5e1;
+  padding: 10px 14px;
+  border-bottom: 2px solid #cbd5e1;
+  border-right: 1px solid #e2e8f0;
   text-align: left;
 }
 
 :deep(.ProseMirror td) {
-  padding: 8px 12px;
-  border: 1px solid #e2e8f0;
+  padding: 9px 14px;
+  border-bottom: 1px solid #f1f5f9;
+  border-right: 1px solid #e2e8f0;
   color: #334155;
   position: relative;
+  transition: background-color 0.12s ease;
+}
+
+:deep(.ProseMirror tr:last-child td) {
+  border-bottom: none;
+}
+
+:deep(.ProseMirror tr td:last-child),
+:deep(.ProseMirror tr th:last-child) {
+  border-right: none;
+}
+
+:deep(.ProseMirror tbody tr:nth-child(even)) {
+  background-color: #fafbfc;
+}
+
+:deep(.ProseMirror tbody tr:hover td) {
+  background-color: #f0f7ff;
 }
 
 :deep(.ProseMirror .selectedCell:after) {
@@ -1639,24 +1980,60 @@ defineExpose({
   pointer-events: none;
 }
 
-:deep(.ProseMirror table.ctq-spec-table th) {
-  background: #f0fdf4;
-  color: #166534;
-  border-color: #bbf7d0;
-}
-:deep(.ProseMirror table.eight-d-table th) {
-  background: #eff6ff;
-  color: #1e40af;
-  border-color: #bfdbfe;
-}
-
-/* 图片样式 */
+/* 图片样式：支持免下载灯箱预览提示 */
 :deep(.ProseMirror img) {
   max-width: 100%;
   height: auto;
-  border-radius: 6px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
-  margin: 12px 0;
+  border-radius: 8px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
+  margin: 14px 0;
+  cursor: zoom-in;
+  transition: all 0.2s ease;
+  border: 1px solid #e2e8f0;
+}
+:deep(.ProseMirror img:hover) {
+  box-shadow: 0 8px 24px rgba(37, 99, 235, 0.18);
+  transform: translateY(-1px);
+}
+
+/* 代码关键字高亮着色 (深色主题) */
+:deep(.hljs-keyword),
+:deep(.hljs-selector-tag),
+:deep(.hljs-subst) {
+  color: #38bdf8 !important;
+  font-weight: 600;
+}
+:deep(.hljs-string),
+:deep(.hljs-title),
+:deep(.hljs-section),
+:deep(.hljs-attribute),
+:deep(.hljs-literal),
+:deep(.hljs-template-tag),
+:deep(.hljs-template-variable),
+:deep(.hljs-type),
+:deep(.hljs-addition) {
+  color: #4ade80 !important;
+}
+:deep(.hljs-comment),
+:deep(.hljs-quote),
+:deep(.hljs-deletion),
+:deep(.hljs-meta) {
+  color: #64748b !important;
+  font-style: italic;
+}
+:deep(.hljs-number),
+:deep(.hljs-regexp),
+:deep(.hljs-link) {
+  color: #fbbf24 !important;
+}
+:deep(.hljs-built_in),
+:deep(.hljs-symbol),
+:deep(.hljs-bullet) {
+  color: #c084fc !important;
+}
+:deep(.hljs-function),
+:deep(.hljs-params) {
+  color: #f1f5f9 !important;
 }
 
 /* AI 智写按钮 (信标 1 移入 信标 2) */
@@ -1989,6 +2366,106 @@ defineExpose({
   height: 16px;
   background: rgba(255, 255, 255, 0.2);
   margin: 0 3px;
+}
+
+/* Word 导入/导出按钮 */
+.docx-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 11.5px;
+  color: #334155;
+  padding: 2px 7px;
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  border-radius: 4px;
+  transition: all 0.12s ease;
+}
+.docx-btn:hover:not(:disabled) {
+  background: #eff6ff;
+  color: #2563eb;
+  border-color: #bfdbfe;
+}
+.docx-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.docx-icon {
+  font-size: 12px;
+}
+.docx-txt {
+  font-weight: 500;
+}
+
+/* 大纲右键上下文菜单浮层 */
+.sqm-outline-context-menu {
+  position: fixed;
+  z-index: 9999;
+  background: #0f172a;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 8px;
+  padding: 5px;
+  min-width: 180px;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.35);
+  user-select: none;
+}
+
+.context-menu-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #94a3b8;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  margin-bottom: 4px;
+}
+.header-title {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 140px;
+}
+
+.context-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  font-size: 12px;
+  color: #cbd5e1;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+.context-menu-item:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+}
+.context-menu-item.ai-action {
+  color: #93c5fd;
+  font-weight: 500;
+}
+.context-menu-item.ai-action:hover {
+  background: linear-gradient(135deg, rgba(37, 99, 235, 0.35) 0%, rgba(99, 102, 241, 0.35) 100%);
+  color: #ffffff;
+}
+
+.context-menu-sep {
+  height: 1px;
+  background: rgba(255, 255, 255, 0.1);
+  margin: 4px 0;
+}
+
+.context-menu-fade-enter-active,
+.context-menu-fade-leave-active {
+  transition: opacity 0.12s ease, transform 0.12s ease;
+}
+.context-menu-fade-enter-from,
+.context-menu-fade-leave-to {
+  opacity: 0;
+  transform: scale(0.95);
 }
 </style>
 

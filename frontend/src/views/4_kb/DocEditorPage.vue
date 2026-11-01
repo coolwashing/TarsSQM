@@ -51,6 +51,7 @@
           <TiptapEditor
             ref="tiptapRef"
             v-model="doc.content_html"
+            :doc-title="doc.title"
             :is-wide="isWideMode"
             :ai-active="aiCopilotVisible"
             @update:is-wide="handleWideChange"

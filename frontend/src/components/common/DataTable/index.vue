@@ -809,4 +809,13 @@ defineExpose({
 .inline-edit-control {
   width: 100% !important;
 }
+
+:deep(.el-empty__description) {
+  white-space: nowrap !important;
+}
+:deep(.el-empty__description p) {
+  white-space: nowrap !important;
+  font-size: 13px;
+  color: #64748b;
+}
 </style>

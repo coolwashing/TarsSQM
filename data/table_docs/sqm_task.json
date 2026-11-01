@@ -1,0 +1,11 @@
+{
+  "table_name": "sqm_task",
+  "title": "sqm_task 架构设计规范",
+  "business_module": "sqm_task",
+  "description": "关于 sqm_task 的物理架构与质量业务流程规范",
+  "author": "系统架构师",
+  "version": "1.0.0",
+  "updated_at": "2026-11-01 21:23:14",
+  "html_content": "<h2>1. 业务定位与核心场景</h2>\n<p><strong>sqm_task</strong>（sqm_task）是制造质量管理系统（SQM）中的重要业务实体，承载工程与供应链质量管控的数据流。</p>\n\n<h2>2. 核心架构与主键设计</h2>\n<ul>\n  <li><strong>物理表名：</strong><code>sqm_task</code></li>\n  <li><strong>业务定义：</strong>基础业务实体数据表</li>\n  <li><strong>存储引擎：</strong>InnoDB（行级锁，支持事务，字符集 utf8mb4）</li>\n</ul>\n\n<h2>3. 关键字段与业务约束</h2>\n<ul>\n<li><code>id</code> (int, 主键)：自增物理主键</li><li><code>task_code</code> (varchar)：任务流水编号, 如 TSK-202611-001</li><li><code>title</code> (varchar)：任务标题</li><li><code>description_html</code> (text)：任务描述与验收Checklist (HTML/富文本)</li><li><code>status</code> (varchar)：任务流转状态: TODO / IN_PROGRESS / PENDING_REVIEW / DONE / BLOCKED</li><li><code>priority</code> (varchar)：优先级: LOW / MEDIUM / HIGH / URGENT</li><li><code>source_type</code> (varchar)：业务源头: SUPPLIER(供应商) / PART(零件) / CTQ(关键特性) / DOC_KB(规程知识库) / CUSTOM(自建待办)</li><li><code>source_id</code> (int)：原业务主键ID</li><li><code>source_title</code> (varchar)：源头实体名称快照 (如 '苏州精工模具有限公司' 或 '法兰盘')</li><li><code>source_url</code> (varchar)：源头快捷回跳路由 (如 '/maindata/supplier')</li><li><code>assignee_id</code> (int)：责任人ID</li><li><code>assignee_name</code> (varchar)：责任工程师姓名</li><li><code>creator_id</code> (int)：创建人ID</li><li><code>creator_name</code> (varchar)：创建人姓名</li><li><code>start_date</code> (date)：计划开始日期</li><li><code>due_date</code> (date)：计划截止到期日</li><li><code>completed_at</code> (datetime)：实际闭环交付时间</li><li><code>parent_id</code> (int)：父任务ID</li><li><code>predecessor_ids</code> (json)：前置依赖任务ID列表 [101, 102]</li><li><code>tags</code> (json)：标签池 ['PPAP试模', 'CTQ红线', '8D对策']</li><li><code>sort_order</code> (int)：看板/甘特排序权重</li><li><code>created_at</code> (datetime)：创建时间</li><li><code>updated_at</code> (datetime)：更新时间</li>\n</ul>\n\n<h2>4. 上下游数据流向与关联关系</h2>\n<p>本表在业务生命周期中与上下游业务模块保持强一致性联动：</p>\n<ul>\n  <li><strong>上游来源：</strong>主数据配置、ERP/MES 接口同步或现场作业录入。</li>\n  <li><strong>下游流向：</strong>统计过程控制（SPC）、质量检验、8D 闭环整改与溯源看板。</li>\n</ul>\n\n<h2>5. 质量合规与维护规约</h2>\n<p>所有对本表的写操作需遵循 APQP/PPAP 质量审计规范，核心业务变更均保留操作人与时间戳。</p>",
+  "markdown_content": "# sqm_task 架构设计规范\n\n## 业务定位\n\n"
+}

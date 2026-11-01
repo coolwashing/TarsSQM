@@ -325,6 +325,31 @@
           </div>
         </div>
       </el-tab-pane>
+
+      <!-- Tab 3: 协同任务中心与质量整改 (可插拔微组件) -->
+      <el-tab-pane name="tasks" v-if="isEdit && form.id">
+        <template #label>
+          <span class="tab-label-custom">
+            <el-icon><List /></el-icon>
+            <span>协同任务 (CAPA)</span>
+            <el-badge
+              v-if="supplierTaskCount > 0"
+              :value="supplierTaskCount"
+              class="tab-badge"
+              type="danger"
+            />
+          </span>
+        </template>
+        <div class="tasks-tab-content" style="padding: 12px 0;">
+          <EmbeddedTaskWidget
+            source-type="SUPPLIER"
+            :source-id="form.id"
+            :source-title="form.name || form.code"
+            :source-url="`/maindata/supplier?id=${form.id}`"
+            @change="(c: number) => supplierTaskCount = c"
+          />
+        </div>
+      </el-tab-pane>
     </el-tabs>
   </DrawerContainer>
 </template>
@@ -332,13 +357,14 @@
 <script setup lang="ts">
 import { ref, reactive, computed, nextTick, onMounted } from 'vue'
 import type { FormInstance, FormRules } from 'element-plus'
-import { Search, InfoFilled, Document, Download } from '@element-plus/icons-vue'
+import { Search, InfoFilled, Document, Download, List } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import axios from 'axios'
 import DrawerContainer from '@/components/common/DrawerContainer.vue'
 import { useDirtyCheck } from '@/components/common/useDirtyCheck'
 import Editor from '@/components/editor/index.vue'
 import Uploader from '@/components/uploader/index.vue'
+import EmbeddedTaskWidget from '@/views/task/components/EmbeddedTaskWidget.vue'
 import type { AttachmentItem } from '@/components/uploader/types'
 
 interface SupplierModel {
@@ -380,8 +406,9 @@ const visible = ref(false)
 const loading = ref(false)
 const isEdit = computed(() => !!form.id)
 const formRef = ref<FormInstance>()
-const activeTab = ref<'basic' | 'profile'>('basic')
+const activeTab = ref<'basic' | 'profile' | 'tasks'>('basic')
 const attachmentList = ref<AttachmentItem[]>([])
+const supplierTaskCount = ref(0)
 const uploaderRef = ref<any>()
 
 const checkingCode = ref(false)
@@ -609,7 +636,7 @@ const openCreate = () => {
 }
 
 // 打开编辑抽屉 (支持传入默认激活 tab)
-const openEdit = async (supplierId: number, defaultTab: 'basic' | 'profile' = 'basic') => {
+const openEdit = async (supplierId: number, defaultTab: 'basic' | 'profile' | 'tasks' = 'basic') => {
   resetForm()
   activeTab.value = defaultTab
   loadOptions()

@@ -396,7 +396,7 @@ const handleCreate = () => {
   supplierFormRef.value?.openCreate()
 }
 
-const handleEdit = (row: SupplierRow, tab: 'basic' | 'profile' = 'basic') => {
+const handleEdit = (row: SupplierRow, tab: 'basic' | 'profile' | 'tasks' = 'basic') => {
   supplierFormRef.value?.openEdit(row.id, tab)
 }
 

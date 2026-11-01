@@ -73,6 +73,14 @@
           </template>
         </el-menu-item>
 
+        <!-- 协同任务中心 (总任务控制台) -->
+        <el-menu-item index="/tasks">
+          <el-icon><Calendar /></el-icon>
+          <template #title>
+            <span class="menu-title">协同任务中心</span>
+          </template>
+        </el-menu-item>
+
         <!-- 数据库工作台 / 数据字典与异机密码向导 -->
         <el-menu-item index="/dev/database">
           <el-icon><Coin /></el-icon>
@@ -117,6 +125,7 @@ import {
   List,
   Notebook,
   Coin,
+  Calendar,
   Expand,
   Fold
 } from '@element-plus/icons-vue'
