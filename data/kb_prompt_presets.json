@@ -29,17 +29,5 @@
     "name": "⚠️ PFMEA",
     "prompt": "分析全流程工艺潜在失效模式与后果，导出 PFMEA 严重度/频度/探测度清单",
     "is_system": true
-  },
-  {
-    "id": "p_tolerance",
-    "name": "📊 公差表",
-    "prompt": "整理核心零部件尺寸配合公差、形位公差与测量量具标准数据表",
-    "is_system": true
-  },
-  {
-    "id": "p_custom_1793411643",
-    "name": "⚙️ 法兰首检",
-    "prompt": "针对机器人高精密法兰端面垂直度进行首件确认",
-    "is_system": false
   }
 ]

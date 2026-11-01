@@ -7,13 +7,12 @@
       :class="{ 'is-collapsed': isCollapsed, 'is-dragging': isDragging }"
       :style="paletteStyle"
     >
-      <!-- 调色盘顶栏 (可拖拽手柄、折叠与关闭，完全非模态无背景遮罩，背景内容随时可点可编辑) -->
+      <!-- 调色盘顶栏 (极简拖拽与控制栏) -->
       <div class="palette-header" @mousedown="onHeaderMouseDown">
         <div class="palette-header-left">
           <span class="palette-drag-grip" title="按住拖拽至屏幕任意位置">⋮⋮</span>
           <span class="palette-sparkle">✨</span>
-          <span class="palette-title">{{ isCollapsed ? (currentScopeObj.label || 'AI 智写伴侣') : 'AI 智写伴侣' }}</span>
-          <span class="palette-mode-tag" v-if="!isCollapsed">非模态调色盘</span>
+          <span class="palette-title">AI 智写</span>
         </div>
 
         <div class="palette-header-right">
@@ -31,7 +30,7 @@
             type="button"
             class="palette-ctrl-btn close"
             @click.stop="handleCancel"
-            title="关闭伴侣 (随时可从上方工具栏或划选呼出)"
+            title="关闭伴侣"
           >
             ✕
           </button>
@@ -41,159 +40,126 @@
       <!-- 调色盘主体内容 (折叠时收起) -->
       <div class="palette-body" v-show="!isCollapsed">
         <div class="copilot-container">
-          <!-- 1. 一体化沉浸式输入卡片 (Linear / Raycast 质感) -->
+          <!-- 1. 一体化沉浸式输入卡片 (对齐 Alt+X 交互：信标内联编辑 + 下方信标清单) -->
           <div class="command-card">
-        <!-- 🎯 作用目标靶向状态栏 -->
-        <div class="scope-lock-card" :class="{ 'is-targeted': selectedScope !== 'ALL' }">
-          <div class="lock-card-main">
-            <div class="lock-status-badge" :class="{ 'is-locked': selectedScope !== 'ALL' }">
-              <span class="lock-icon">{{ selectedScope === 'SELECTION' ? '📌' : selectedScope !== 'ALL' ? '🔒' : '🌐' }}</span>
-              <span class="lock-label">作用目标：</span>
-              <span class="lock-target-name">{{ currentScopeObj.label }}</span>
-              <span class="lock-tag" v-if="selectedScope !== 'ALL'">
-                {{ selectedScope === 'SELECTION' ? '选区直选' : currentScopeObj.type === 'table' ? '质量表格' : '章节隔离' }}
+            <!-- 需求描述小标题栏 (含清空输入与存为预设) -->
+            <div class="prompt-header-bar">
+              <span class="prompt-header-title">
+                <el-icon><EditPen /></el-icon>
+                <span>需求描述</span>
               </span>
-            </div>
-
-            <!-- 若当前为选区直选，直接展示选中文本气泡引用片段 (信标 1 革命性体验升级) -->
-            <div class="selected-text-quote" v-if="selectedScope === 'SELECTION' && activeSelectedText">
-              <span class="quote-symbol">“</span>
-              <span class="quote-body">{{ activeSelectedText.length > 60 ? activeSelectedText.slice(0, 60) + '...' : activeSelectedText }}</span>
-              <span class="quote-symbol">”</span>
-            </div>
-            <div class="lock-reassurance" v-else>
-              <span v-if="selectedScope !== 'ALL'" class="reassurance-safe">
-                <el-icon><Check /></el-icon> 强隔离保护中 · 其余章节 100% 留存不覆盖
-              </span>
-              <span v-else class="reassurance-all">
-                💡 全篇规程模式 · 可划选正文或点击下方芯片锁定局部
-              </span>
-            </div>
-          </div>
-
-          <div class="lock-card-actions" v-if="selectedScope !== 'ALL'">
-            <button
-              type="button"
-              class="unlock-scope-btn"
-              @click="selectedScope = 'ALL'"
-              title="切换为全篇规程整体模式"
-            >
-              切为全篇
-            </button>
-          </div>
-        </div>
-
-        <!-- 针对选区模式的专属快操作捷径条 (信标 1: 用户选区后一键触发) -->
-        <div class="selection-actions-bar" v-if="selectedScope === 'SELECTION'">
-          <span class="sel-bar-title">⚡ 选区速写：</span>
-          <button type="button" class="sel-action-btn" @click="applySelectionPrompt('polish')">✨ 润色精炼</button>
-          <button type="button" class="sel-action-btn" @click="applySelectionPrompt('ctq')">🎯 提取 CTQ</button>
-          <button type="button" class="sel-action-btn" @click="applySelectionPrompt('table')">📊 转为表格</button>
-          <button type="button" class="sel-action-btn" @click="applySelectionPrompt('8d')">🔧 补充 8D</button>
-        </div>
-
-        <!-- 针对表格模式的专属快操作捷径条 (信标 3 点击表格立即呈现) -->
-        <div class="selection-actions-bar table-bar" v-else-if="selectedScope === 'TABLES' || currentScopeObj.type === 'table'">
-          <span class="sel-bar-title">📊 表格速写：</span>
-          <button type="button" class="sel-action-btn" @click="applyTablePrompt('ctq')">🎯 补全公差</button>
-          <button type="button" class="sel-action-btn" @click="applyTablePrompt('audit')">🔍 审核合规</button>
-          <button type="button" class="sel-action-btn" @click="applyTablePrompt('expand')">➕ 扩充项目</button>
-          <button type="button" class="sel-action-btn" @click="applyTablePrompt('8d')">🔧 8D 对策</button>
-        </div>
-
-        <!-- 目标切换芯片条 (极简紧凑，避免横向长列表溢出) -->
-        <div class="target-pills-row" v-else-if="availableScopes.length > 1">
-          <span class="target-pills-label">🎯 目标切换：</span>
-          <div class="target-pills-scroll">
-            <button
-              v-if="activeSelectedText"
-              type="button"
-              class="target-pill-btn"
-              :class="{ active: selectedScope === 'SELECTION' }"
-              @click="selectedScope = 'SELECTION'"
-            >
-              <span>📌 当前选区 ({{ activeSelectedText.length }}字)</span>
-            </button>
-            <button
-              type="button"
-              class="target-pill-btn"
-              :class="{ active: selectedScope === 'ALL' }"
-              @click="selectedScope = 'ALL'"
-            >
-              <span>🌐 全篇整体</span>
-            </button>
-            <button
-              v-if="initialTarget?.targetSection === 'TABLES'"
-              type="button"
-              class="target-pill-btn"
-              :class="{ active: selectedScope === 'TABLES' }"
-              @click="selectedScope = 'TABLES'"
-            >
-              <span>📊 当前表格</span>
-            </button>
-
-            <!-- 章节下拉，告别铺开几十个按钮的臃肿 -->
-            <el-select
-              v-if="headingScopes.length > 0"
-              v-model="selectedHeadingScope"
-              size="small"
-              placeholder="📑 选择指定章节..."
-              class="heading-scope-select"
-              @change="handleSelectHeadingScope"
-            >
-              <el-option
-                v-for="h in headingScopes"
-                :key="h.value"
-                :label="`${h.icon} ${h.label}`"
-                :value="h.value"
-              />
-            </el-select>
-          </div>
-        </div>
-
-        <!-- 信标锁定展示区 (分章节展示圈选信标，前10字预览，精准联动，问 4) -->
-        <div class="beacon-capsules-group" v-if="beacons && beacons.length > 0">
-          <div class="beacon-group-header">
-            <span class="beacon-header-title">
-              <span class="beacon-radar-icon">🎯</span>
-              <span>已锁定 <strong>{{ beacons.length }}</strong> 处信标对象</span>
-            </span>
-            <button
-              type="button"
-              class="beacon-clear-all-btn"
-              @click="emit('clear-beacons')"
-              title="清空已选信标"
-            >
-              清空全部
-            </button>
-          </div>
-
-          <div class="beacon-sections-list">
-            <div
-              v-for="sec in groupedBeacons"
-              :key="sec.sectionName"
-              class="beacon-section-row"
-            >
-              <div class="beacon-section-title">
-                <span class="section-badge">📑 {{ sec.sectionName }}</span>
-                <span class="section-count">({{ sec.items.length }})</span>
+              <div class="prompt-header-actions">
+                <button
+                  v-if="promptText.trim()"
+                  type="button"
+                  class="prompt-action-link"
+                  @click="handleClearPrompt"
+                  title="清空当前输入文本"
+                >
+                  清空
+                </button>
+                <button
+                  type="button"
+                  class="prompt-action-link primary"
+                  @click="openAddPresetDialog"
+                  title="存为快捷预设指令"
+                >
+                  存为预设
+                </button>
               </div>
-              <div class="beacon-chips-wrap">
+            </div>
+
+            <!-- 需求输入框 textarea (支持直接编辑 【信标 1】 【信标 2】 等并与文字混编) -->
+            <textarea
+              ref="promptTextareaRef"
+              v-model="promptText"
+              class="command-textarea"
+              placeholder="输入需求描述（结合【信标】进行编写，如：【信标 1】 【信标 2】 进行优化）..."
+              rows="3"
+              @keydown.ctrl.enter="handleStartGenerate"
+            ></textarea>
+
+            <!-- 快捷指令预设池 (简洁紧凑，彻底杜绝换行截断与废话) -->
+            <div class="preset-track-wrap">
+              <div class="preset-scroll-track">
                 <div
-                  v-for="b in sec.items"
+                  v-for="p in promptPresets"
+                  :key="p.id"
+                  class="preset-pill-item"
+                >
+                  <span
+                    class="preset-pill"
+                    :class="{ 'is-custom': !p.is_system }"
+                    :title="p.prompt"
+                    @click="applyPreset(p)"
+                  >
+                    {{ p.name }}
+                  </span>
+                  <div class="preset-pill-actions">
+                    <el-icon
+                      class="preset-action-btn edit-btn"
+                      title="编辑此指令"
+                      @click.stop="openEditPresetDialog(p)"
+                    >
+                      <Edit />
+                    </el-icon>
+                    <el-icon
+                      class="preset-action-btn del-btn"
+                      title="删除此指令"
+                      @click.stop="deletePreset(p.id, p.name)"
+                    >
+                      <Close />
+                    </el-icon>
+                  </div>
+                </div>
+
+                <!-- 新增快捷指令标签 -->
+                <span
+                  class="preset-pill add-pill"
+                  @click="openAddPresetDialog"
+                  title="新增自定义快捷指令"
+                >
+                  <el-icon><Plus /></el-icon>
+                  <span>增加指令</span>
+                </span>
+              </div>
+            </div>
+
+            <!-- 信标清单 (严格对齐 Alt+X 规范，展示在指令下方) -->
+            <div v-if="beaconListWithTags.length > 0" class="beacons-cart-section">
+              <div class="cart-header">
+                <span class="cart-title">
+                  <el-icon color="#6366f1"><Location /></el-icon>
+                  <span>信标清单 ({{ beaconListWithTags.length }})</span>
+                </span>
+                <button
+                  type="button"
+                  class="cart-clear-btn"
+                  @click="handleClearAllBeacons"
+                  title="清空全部信标"
+                >
+                  清空
+                </button>
+              </div>
+
+              <!-- 信标列表条目 -->
+              <div class="beacons-list">
+                <div
+                  v-for="b in beaconListWithTags"
                   :key="b.id"
-                  class="beacon-chip"
-                  :title="`行 #${b.numStr} · ${b.typeName}\n${b.fullText}`"
+                  class="beacon-chip-card"
+                  :title="`[${b.sectionName}] 行#${b.numStr} · ${b.typeName}\n${b.fullText}`"
                   @mouseenter="emit('highlight-beacon', { id: b.id, highlight: true })"
                   @mouseleave="emit('highlight-beacon', { id: b.id, highlight: false })"
                 >
-                  <span class="chip-icon">{{ b.icon }}</span>
-                  <span class="chip-num">#{{ b.numStr }}</span>
-                  <span class="chip-preview">{{ b.previewText }}</span>
+                  <span class="beacon-badge">{{ b.tag }}</span>
+                  <span class="beacon-comp" v-if="b.sectionName">{{ b.sectionName }}</span>
+                  <span class="beacon-line-tag">#{{ b.numStr }}</span>
+                  <span class="beacon-snippet text-truncate">{{ b.previewText }}</span>
                   <button
                     type="button"
-                    class="chip-remove-btn"
-                    @click.stop="emit('remove-beacon', b.id)"
+                    class="beacon-del-btn"
+                    @click.stop="handleDeleteBeacon(b.id)"
                     title="移除此信标"
                   >
                     ✕
@@ -201,103 +167,50 @@
                 </div>
               </div>
             </div>
-          </div>
-        </div>
 
-        <!-- 需求输入框 -->
-        <textarea
-          v-model="promptText"
-          class="command-textarea"
-          :placeholder="selectedScope === 'SELECTION'
-            ? '针对当前选中文本输入编写/润色要求，或点选上方快速动作（Ctrl+Enter 生成）...'
-            : (selectedScope !== 'ALL'
-              ? `针对【${currentScopeObj.label}】进行定向优化与分析（Ctrl+Enter 生成）...`
-              : '在此输入质量规程编制或优化需求（Ctrl+Enter 生成）...')"
-          rows="2"
-          @keydown.ctrl.enter="handleStartGenerate"
-        ></textarea>
-
-        <!-- 快捷指令预设池 (全篇模式时展示通用指令) -->
-        <div class="preset-track-wrap" v-if="selectedScope !== 'SELECTION'">
-          <div class="preset-scroll-track">
-            <span class="preset-track-label">💡 快捷指令：</span>
-            <div
-              v-for="p in promptPresets"
-              :key="p.id"
-              class="preset-pill-item"
-            >
-              <span
-                class="preset-pill"
-                :class="{ 'is-custom': !p.is_system }"
-                :title="p.prompt"
-                @click="applyPreset(p)"
-              >
-                {{ p.name }}
-              </span>
-              <div class="preset-pill-actions">
-                <el-icon
-                  class="preset-action-btn edit-btn"
-                  title="编辑此指令"
-                  @click.stop="openEditPresetDialog(p)"
-                >
-                  <Edit />
-                </el-icon>
-                <el-icon
-                  class="preset-action-btn del-btn"
-                  title="删除此指令"
-                  @click.stop="deletePreset(p.id, p.name)"
-                >
-                  <Close />
-                </el-icon>
+            <!-- 单纯选区时的紧凑感知条 (未选信标时) -->
+            <div v-else-if="activeSelectedText" class="beacons-cart-section is-single">
+              <div class="cart-header">
+                <span class="cart-title">
+                  <span class="pin-icon">📌</span>
+                  <span>当前选区 ({{ activeSelectedText.length }}字)</span>
+                </span>
+                <span class="beacon-snippet text-truncate" :title="activeSelectedText">
+                  "{{ activeSelectedText.slice(0, 24) + (activeSelectedText.length > 24 ? '…' : '') }}"
+                </span>
               </div>
             </div>
 
-            <!-- 新增快捷指令标签 -->
-            <span
-              class="preset-pill add-pill"
-              @click="openAddPresetDialog"
-              title="新增自定义快捷指令，持久化至 data/kb_prompt_presets.json"
-            >
-              <el-icon><Plus /></el-icon>
-              <span>增加指令</span>
-            </span>
-          </div>
-        </div>
+            <!-- 卡片底栏：简短提示与开始生成 -->
+            <div class="command-action-bar">
+              <div class="action-left">
+                <span class="rag-hint">
+                  💡 按 Ctrl+Enter 立即生成
+                </span>
+              </div>
 
-        <!-- 卡片底栏：RAG 信息与生成/取消按钮 -->
-        <div class="command-action-bar">
-          <div class="action-left">
-            <span v-if="referencedDocs.length > 0" class="rag-pill" :title="'已关联标准: ' + referencedDocs.join('、')">
-              <el-icon><Document /></el-icon>
-              <span>对齐: {{ referencedDocs[0] }} {{ referencedDocs.length > 1 ? `+${referencedDocs.length - 1}` : '' }}</span>
-            </span>
-            <span v-else class="rag-hint">
-              💡 点选快捷动作或按 Ctrl+Enter 立即生成
-            </span>
+              <div class="action-right">
+                <button
+                  v-if="!generatedContent && !generating"
+                  type="button"
+                  class="cancel-btn"
+                  @click="handleCancel"
+                >
+                  取消
+                </button>
+                <button
+                  class="generate-main-btn"
+                  :class="{ loading: generating }"
+                  :disabled="!promptText.trim() || generating"
+                  @click="handleStartGenerate"
+                >
+                  <span v-if="generating" class="spin-icon">⏳</span>
+                  <span v-else>✨</span>
+                  <span>{{ generating ? '正在智写...' : (generatedContent ? '重新生成' : '开始智能生成') }}</span>
+                </button>
+              </div>
+            </div>
           </div>
-
-          <div class="action-right">
-            <button
-              v-if="!generatedContent && !generating"
-              type="button"
-              class="cancel-btn"
-              @click="handleCancel"
-            >
-              取消
-            </button>
-            <button
-              class="generate-main-btn"
-              :class="{ loading: generating }"
-              :disabled="!promptText.trim() || generating"
-              @click="handleStartGenerate"
-            >
-              <span v-if="generating" class="spin-icon">⏳</span>
-              <span v-else>✨</span>
-              <span>{{ generating ? '正在智写...' : (generatedContent ? '重新生成' : '开始智能生成') }}</span>
-            </button>
-          </div>
-        </div>
-      </div>
 
       <!-- 2. 无界通透审查预览区 (信标 3 修复：仅在生成中或生成完毕时展开，避免未生成时的巨大空白) -->
       <div class="preview-card" v-if="generatedContent || generating">
@@ -331,14 +244,8 @@
       <!-- 3. 底部人工决策动作栏 (仅在有内容时出现，信噪比极高) -->
       <div class="modal-footer" v-if="generatedContent">
         <div class="footer-note">
-          <span v-if="selectedScope === 'SELECTION'" class="safe-guard-hint">
-            🛡️ 原生坐标保护：本次将精准替换选区正文，其余段落与章节 100% 绝对留存。
-          </span>
-          <span v-else-if="selectedScope !== 'ALL'" class="safe-guard-hint">
-            🛡️ 章节隔离保护：仅更新【{{ currentScopeObj.label }}】，其余章节绝不覆盖。
-          </span>
-          <span v-else class="safe-guard-hint">
-            ⚠️ 请人工核对技术参数与公差标准后，再确认写入正文。
+          <span class="safe-guard-hint">
+            🛡️ 作用范围已锁定，其余章节内容保持留存不变。
           </span>
         </div>
         <div class="footer-actions">
@@ -353,29 +260,19 @@
             📋 复制
           </el-button>
           <el-button
-            v-if="selectedScope !== 'ALL'"
             type="primary"
             size="small"
             class="confirm-btn lock-confirm-btn"
             @click="confirmInsert('replace')"
           >
-            🟢 {{ selectedScope === 'SELECTION' ? '精准替换选区正文' : '精准替换锁定目标' }}
-          </el-button>
-          <el-button
-            v-else
-            type="primary"
-            size="small"
-            class="confirm-btn"
-            @click="confirmInsert('replace')"
-          >
-            🟢 确认写入正文
+            🟢 确认替换写入
           </el-button>
           <el-button
             type="default"
             size="small"
             @click="confirmInsert('insert')"
           >
-            ➕ {{ selectedScope === 'SELECTION' ? '插入在选区之后' : (selectedScope !== 'ALL' ? '追加至该章节末尾' : '追加至文末') }}
+            ➕ 追加至末尾
           </el-button>
         </div>
       </div>
@@ -423,8 +320,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted } from 'vue'
-import { Document, CopyDocument, Download, Refresh, Star, Close, Edit, Plus, Check } from '@element-plus/icons-vue'
+import { ref, computed, watch, onMounted, nextTick } from 'vue'
+import { Document, CopyDocument, Download, Refresh, Star, Close, Edit, Plus, Check, EditPen, Location, Delete } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { BeaconItem } from '@/components/editor/TiptapEditor.vue'
 
@@ -736,9 +633,63 @@ watch(
 )
 
 const promptText = ref('')
+const promptTextareaRef = ref<HTMLTextAreaElement | null>(null)
 const generating = ref(false)
 const generatedContent = ref('')
 const referencedDocs = ref<string[]>([])
+
+// 格式化信标标号与详情 (严格对齐 Alt+X 规范：【信标 1】、 【信标 2】 等)
+const beaconListWithTags = computed(() => {
+  return (props.beacons || []).map((b, idx) => ({
+    ...b,
+    tag: `【信标 ${idx + 1}】`
+  }))
+})
+
+// 光标位置插入占位符 (同 Alt+X 提词器交互)
+const insertTagAtCursor = (tag: string) => {
+  const textarea = promptTextareaRef.value
+  if (!textarea) {
+    promptText.value += (promptText.value ? ' ' : '') + tag
+    return
+  }
+  const start = textarea.selectionStart ?? promptText.value.length
+  const end = textarea.selectionEnd ?? promptText.value.length
+  const text = promptText.value
+  const before = text.substring(0, start)
+  const after = text.substring(end)
+  const insertContent = (before && !before.endsWith(' ') ? ' ' : '') + tag + (after && !after.startsWith(' ') ? ' ' : '')
+  promptText.value = before + insertContent + after
+
+  nextTick(() => {
+    textarea.focus()
+    const newPos = before.length + insertContent.length
+    textarea.setSelectionRange(newPos, newPos)
+  })
+}
+
+// 清空需求输入
+const handleClearPrompt = () => {
+  promptText.value = ''
+  if (promptTextareaRef.value) {
+    promptTextareaRef.value.focus()
+  }
+}
+
+// 移除单个信标 (同步剔除输入框中对应的 【信标 X】 占位符)
+const handleDeleteBeacon = (id: string) => {
+  const b = beaconListWithTags.value.find(item => item.id === id)
+  if (b) {
+    promptText.value = promptText.value.replace(new RegExp(`\\s*${b.tag}\\s*`, 'g'), ' ').replace(/\s+/g, ' ').trim()
+  }
+  emit('remove-beacon', id)
+}
+
+// 清空全部信标 (同步剔除输入框中所有的信标占位符)
+const handleClearAllBeacons = () => {
+  promptText.value = promptText.value.replace(/【信标\s*\d+】/g, '').replace(/\s+/g, ' ').trim()
+  emit('clear-beacons')
+}
 
 // 快捷预设指令列表 (从后端 data/kb_prompt_presets.json 动态同步)
 const promptPresets = ref<PromptPreset[]>([])
@@ -770,9 +721,23 @@ const fetchPromptPresets = async () => {
   } catch {}
 }
 
-// 2. 点击标签应用 Prompt
+// 2. 点击标签应用 Prompt (保留已有信标，自然组合为 Prompt)
 const applyPreset = (preset: PromptPreset) => {
-  promptText.value = preset.prompt || preset.name.replace(/^[^\s]+\s*/, '')
+  const pText = preset.prompt || preset.name.replace(/^[^\s]+\s*/, '')
+  const tags = (promptText.value.match(/【信标\s*\d+】/g) || []).join(' ')
+  if (tags) {
+    promptText.value = `${tags} ${pText}`
+  } else if (promptText.value.trim()) {
+    promptText.value += '\n' + pText
+  } else {
+    promptText.value = pText
+  }
+  nextTick(() => {
+    if (promptTextareaRef.value) {
+      promptTextareaRef.value.focus()
+      promptTextareaRef.value.setSelectionRange(promptText.value.length, promptText.value.length)
+    }
+  })
 }
 
 // 3. 打开收藏/新建指令弹窗
@@ -844,8 +809,17 @@ watch(
       fetchPromptPresets()
       const sel = target?.selectedText || props.selectedText
       if (beacons && beacons.length > 0) {
-        if (!promptText.value) {
-          promptText.value = `对当前锁定的 ${beacons.length} 处信标对象进行针对性质量优化与技术标准核对`
+        // 如果输入框为空，自动注入格式化后的信标占位符
+        const tags = beaconListWithTags.value.map(b => b.tag).join(' ')
+        if (!promptText.value.trim()) {
+          promptText.value = `${tags} 进行优化`
+        } else {
+          // 如果已有内容，且有新捕获的信标，插入到光标处
+          beaconListWithTags.value.forEach(b => {
+            if (!promptText.value.includes(b.tag)) {
+              insertTagAtCursor(b.tag)
+            }
+          })
         }
       } else if (sel && sel.trim()) {
         selectedScope.value = 'SELECTION'
@@ -854,7 +828,7 @@ watch(
         }
       } else if (target?.targetSection) {
         selectedScope.value = target.targetSection
-        if (target.targetName && target.targetName !== '全篇规程整体') {
+        if (target.targetName && target.targetName !== '全篇规程整体' && !promptText.value) {
           promptText.value = `针对【${target.targetName}】，补充完善质量控制要求与检验规范`
         }
       } else {
@@ -887,11 +861,11 @@ const handleStartGenerate = async () => {
   referencedDocs.value = []
 
   let selectedTextPayload = props.selectedText || props.initialTarget?.selectedText || ''
-  if (props.beacons && props.beacons.length > 0) {
-    const beaconLines = props.beacons.map(b => {
-      return `[章节: ${b.sectionName} | 行#${b.numStr} · ${b.typeName}] ${b.fullText}`
-    }).join('\n')
-    selectedTextPayload = selectedTextPayload ? `${selectedTextPayload}\n\n[锁定信标清单]:\n${beaconLines}` : `[锁定信标清单]:\n${beaconLines}`
+  if (beaconListWithTags.value.length > 0) {
+    const beaconLines = beaconListWithTags.value.map(b => {
+      return `${b.tag}\n所在章节：${b.sectionName || '正文'}\n定位行号：#${b.numStr} · ${b.typeName}\n包含文本：${b.fullText}`
+    }).join('\n\n')
+    selectedTextPayload = `### [附带定位信标详情 - 共 ${beaconListWithTags.value.length} 个] ###\n\n${beaconLines}`
   }
 
   try {
@@ -1161,16 +1135,6 @@ const handleCancel = () => {
   text-overflow: ellipsis;
 }
 
-.palette-mode-tag {
-  font-size: 10px;
-  padding: 1px 6px;
-  border-radius: 10px;
-  background: rgba(37, 99, 235, 0.2);
-  color: #93c5fd;
-  border: 1px solid rgba(147, 197, 253, 0.3);
-  font-weight: 500;
-}
-
 .palette-header-right {
   display: flex;
   align-items: center;
@@ -1217,24 +1181,6 @@ const handleCancel = () => {
   border-radius: 3px;
 }
 
-.selection-actions-bar.table-bar {
-  background: linear-gradient(90deg, #f0fdf4 0%, #dcfce7 100%) !important;
-  border-bottom: 1px solid #bbf7d0 !important;
-}
-.selection-actions-bar.table-bar .sel-bar-title {
-  color: #166534 !important;
-}
-.selection-actions-bar.table-bar .sel-action-btn {
-  background: #ffffff !important;
-  color: #15803d !important;
-  border: 1px solid #86efac !important;
-}
-.selection-actions-bar.table-bar .sel-action-btn:hover {
-  background: #16a34a !important;
-  color: #ffffff !important;
-  border-color: #16a34a !important;
-}
-
 .copilot-container {
   display: flex;
   flex-direction: column;
@@ -1257,281 +1203,183 @@ const handleCancel = () => {
   box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.12);
 }
 
-/* 目标靶向锁定与防覆盖隔离横幅 (信标 3 & 4 交互优化) */
-.scope-lock-card {
+/* 需求描述标题栏 (对齐 Alt+X) */
+.prompt-header-bar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 8px 14px;
-  background: #f8fafc;
-  border-bottom: 1px solid #f1f5f9;
-  border-top-left-radius: 9px;
-  border-top-right-radius: 9px;
-  transition: all 0.2s ease;
-  gap: 12px;
+  padding: 10px 14px 4px 14px;
 }
 
-.scope-lock-card.is-targeted {
-  background: linear-gradient(90deg, #f0fdf4 0%, #ecfdf5 100%);
-  border-bottom: 1px solid #bbf7d0;
-}
-
-.lock-card-main {
+.prompt-header-title {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
-  gap: 8px 12px;
-  flex: 1;
-  min-width: 0;
-}
-
-.lock-status-badge {
-  display: inline-flex;
-  align-items: center;
   gap: 6px;
-  font-size: 12px;
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
-  padding: 3px 10px;
-  border-radius: 14px;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
-}
-
-.lock-status-badge.is-locked {
-  background: #ffffff;
-  border-color: #86efac;
-  box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.12);
-}
-
-.lock-icon {
-  font-size: 13px;
-}
-
-.lock-label {
+  font-size: 12.5px;
   font-weight: 600;
-  color: #475569;
+  color: #334155;
 }
 
-.lock-target-name {
-  font-weight: 700;
-  color: #0f172a;
-  max-width: 240px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.lock-tag {
-  font-size: 10.5px;
-  font-weight: 600;
-  background: #dcfce7;
-  color: #15803d;
-  padding: 1px 6px;
-  border-radius: 4px;
-  letter-spacing: 0.3px;
-}
-
-.lock-reassurance {
-  font-size: 11.5px;
-  line-height: 1.4;
-}
-
-.reassurance-safe {
-  color: #16a34a;
-  font-weight: 500;
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-}
-
-.reassurance-all {
-  color: #64748b;
-}
-
-.lock-card-actions {
-  flex-shrink: 0;
-}
-
-.unlock-scope-btn {
-  background: #ffffff;
-  border: 1px solid #cbd5e1;
-  color: #475569;
-  font-size: 11px;
-  padding: 3px 8px;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: all 0.15s ease;
-  white-space: nowrap;
-}
-
-.unlock-scope-btn:hover {
-  background: #f1f5f9;
-  color: #0f172a;
-  border-color: #94a3b8;
-}
-
-/* 快捷靶向快选芯片条 */
-.target-pills-row {
+.prompt-header-actions {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 6px 14px;
-  background: #ffffff;
-  border-bottom: 1px dashed #f1f5f9;
-  overflow: hidden;
 }
 
-.target-pills-label {
+.prompt-action-link {
+  background: transparent;
+  border: none;
   font-size: 11.5px;
-  font-weight: 600;
   color: #64748b;
-  white-space: nowrap;
-  flex-shrink: 0;
+  cursor: pointer;
+  padding: 2px 5px;
+  border-radius: 4px;
+  transition: all 0.12s ease;
 }
 
-.target-pills-scroll {
+.prompt-action-link:hover {
+  color: #4f46e5;
+  background: #f1f5f9;
+}
+
+.prompt-action-link.primary {
+  color: #4f46e5;
+  font-weight: 500;
+}
+
+.prompt-action-link.primary:hover {
+  color: #4338ca;
+  background: #eef2ff;
+}
+
+/* 信标清单区域 (严格对齐 Alt+X 交互与视觉) */
+.beacons-cart-section {
+  background: #f8fafc;
+  border: 1px dashed #cbd5e1;
+  border-radius: 8px;
+  margin: 4px 14px 10px 14px;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.beacons-cart-section.is-single {
+  border-style: solid;
+  border-color: #e2e8f0;
+  background: #fafafa;
+}
+
+.cart-header {
   display: flex;
   align-items: center;
-  gap: 6px;
-  overflow-x: auto;
-  scrollbar-width: none;
-  padding: 2px 0;
+  justify-content: space-between;
 }
 
-.target-pills-scroll::-webkit-scrollbar {
-  display: none;
-}
-
-.target-pill-btn {
-  display: inline-flex;
+.cart-title {
+  display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 3px 8px;
-  border-radius: 6px;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
+  gap: 5px;
   font-size: 11.5px;
-  color: #475569;
-  cursor: pointer;
-  transition: all 0.15s ease;
-  white-space: nowrap;
-  flex-shrink: 0;
-  max-width: 200px;
-}
-
-.target-pill-btn .pill-text {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.target-pill-btn:hover {
-  background: #f1f5f9;
-  border-color: #cbd5e1;
+  font-weight: 600;
   color: #1e293b;
 }
 
-.target-pill-btn.active {
-  background: #eff6ff;
-  border-color: #3b82f6;
-  color: #1d4ed8;
-  font-weight: 600;
-}
-
-.pill-check {
+.cart-clear-btn {
+  background: transparent;
+  border: none;
   font-size: 11px;
-  color: #2563eb;
-  font-weight: bold;
+  color: #ef4444;
+  cursor: pointer;
+  padding: 1px 4px;
+  border-radius: 3px;
+  transition: all 0.12s ease;
 }
 
-/* 选中文本气泡引用与快操作条 (信标 1 体验核心) */
-.selected-text-quote {
-  width: 100%;
-  margin-top: 4px;
-  background: rgba(255, 255, 255, 0.95);
-  border: 1px solid #bfdbfe;
-  border-radius: 6px;
-  padding: 4px 8px;
-  font-size: 11.5px;
-  color: #1e3a8a;
-  line-height: 1.4;
+.cart-clear-btn:hover {
+  color: #dc2626;
+  background: #fee2e2;
+}
+
+.beacons-list {
   display: flex;
-  align-items: baseline;
-  gap: 2px;
-}
-
-.quote-symbol {
-  font-family: Georgia, serif;
-  font-size: 14px;
-  font-weight: bold;
-  color: #3b82f6;
-}
-
-.quote-body {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-style: italic;
-}
-
-.selection-actions-bar {
-  display: flex;
-  align-items: center;
   flex-wrap: wrap;
   gap: 6px;
-  padding: 6px 14px;
-  background: #f0fdf4;
-  border-bottom: 1px solid #dcfce7;
 }
 
-.sel-bar-title {
-  font-size: 11.5px;
-  font-weight: 600;
-  color: #15803d;
-  flex-shrink: 0;
-}
-
-.sel-action-btn {
+.beacon-chip-card {
   display: inline-flex;
   align-items: center;
-  gap: 3px;
-  padding: 3px 8px;
-  border-radius: 5px;
+  gap: 5px;
   background: #ffffff;
-  border: 1px solid #86efac;
-  color: #166534;
-  font-size: 11.5px;
-  font-weight: 500;
+  border: 1px solid #c7d2fe;
+  padding: 3px 8px;
+  border-radius: 6px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  font-size: 11px;
   cursor: pointer;
   transition: all 0.15s ease;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+  user-select: none;
 }
 
-.sel-action-btn:hover {
-  background: #22c55e;
-  color: #ffffff;
-  border-color: #16a34a;
+.beacon-chip-card:hover {
+  border-color: #6366f1;
+  box-shadow: 0 2px 6px rgba(99, 102, 241, 0.18);
   transform: translateY(-1px);
 }
 
-.heading-scope-select {
-  width: 150px;
+.beacon-badge {
+  background: #4f46e5;
+  color: #ffffff;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-weight: 700;
+  font-size: 10px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  letter-spacing: -0.2px;
 }
 
-.cancel-btn {
-  background: #f1f5f9;
-  border: 1px solid #cbd5e1;
-  color: #64748b;
-  font-size: 12px;
-  padding: 5px 12px;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.cancel-btn:hover {
-  background: #e2e8f0;
+.beacon-comp {
+  font-weight: 600;
   color: #1e293b;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.beacon-line-tag {
+  font-size: 10px;
+  color: #4338ca;
+  background: #e0e7ff;
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-weight: 600;
+}
+
+.beacon-snippet {
+  color: #64748b;
+  font-size: 10.5px;
+  max-width: 130px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.beacon-del-btn {
+  background: transparent;
+  border: none;
+  padding: 0 2px;
+  font-size: 10.5px;
+  color: #94a3b8;
+  cursor: pointer;
+  border-radius: 2px;
+  transition: all 0.12s ease;
+}
+
+.beacon-del-btn:hover {
+  color: #ef4444;
+  background: #fee2e2;
 }
 
 .safe-guard-hint {
@@ -1552,164 +1400,6 @@ const handleCancel = () => {
 .lock-confirm-btn:hover {
   background: #15803d !important;
   border-color: #15803d !important;
-}
-
-/* 信标锁定展示区 (分章节展示信标芯片) */
-.beacon-capsules-group {
-  margin: 6px 12px 2px 12px;
-  padding: 8px 10px;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.beacon-group-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  font-size: 11.5px;
-  color: #334155;
-}
-
-.beacon-header-title {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.beacon-radar-icon {
-  font-size: 12px;
-}
-
-.beacon-clear-all-btn {
-  padding: 1px 6px;
-  font-size: 10.5px;
-  color: #ef4444;
-  background: transparent;
-  border: 1px solid #fecaca;
-  border-radius: 4px;
-  cursor: pointer;
-  transition: all 0.12s ease;
-}
-
-.beacon-clear-all-btn:hover {
-  background: #fee2e2;
-}
-
-.beacon-sections-list {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  max-height: 130px;
-  overflow-y: auto;
-  padding-right: 2px;
-}
-
-.beacon-sections-list::-webkit-scrollbar {
-  width: 4px;
-}
-.beacon-sections-list::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
-  border-radius: 2px;
-}
-
-.beacon-section-row {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.beacon-section-title {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 10.5px;
-  color: #64748b;
-  font-weight: 600;
-}
-
-.section-badge {
-  background: #e2e8f0;
-  padding: 1px 6px;
-  border-radius: 4px;
-  color: #334155;
-}
-
-.section-count {
-  font-size: 10px;
-  color: #94a3b8;
-}
-
-.beacon-chips-wrap {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-}
-
-.beacon-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 2px 6px;
-  background: #ffffff;
-  border: 1px solid #cbd5e1;
-  border-radius: 12px;
-  font-size: 11px;
-  color: #1e293b;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
-  cursor: default;
-  transition: all 0.15s ease;
-}
-
-.beacon-chip:hover {
-  border-color: #38bdf8;
-  background: #f0f9ff;
-  box-shadow: 0 2px 4px rgba(56, 189, 248, 0.15);
-}
-
-.chip-icon {
-  font-size: 10px;
-}
-
-.chip-num {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-weight: 600;
-  color: #0284c7;
-  font-size: 10px;
-}
-
-.chip-preview {
-  max-width: 120px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 11px;
-  color: #334155;
-}
-
-.chip-remove-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 14px;
-  height: 14px;
-  padding: 0;
-  margin-left: 2px;
-  background: transparent;
-  border: none;
-  border-radius: 50%;
-  color: #94a3b8;
-  font-size: 9px;
-  cursor: pointer;
-  transition: all 0.1s ease;
-}
-
-.chip-remove-btn:hover {
-  background: #fee2e2;
-  color: #ef4444;
 }
 
 .command-textarea {
