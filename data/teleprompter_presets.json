@@ -1,0 +1,44 @@
+[
+  {
+    "id": "preset_ui_ux",
+    "title": "🎨 UI 视觉调优",
+    "prompt": "请优化【信标 1】的视觉样式、间距对齐与整体质感",
+    "isCustom": false
+  },
+  {
+    "id": "preset_form_check",
+    "title": "🛡️ 防呆与校验",
+    "prompt": "请为【信标 1】增加表单防呆校验、非法字符拦截与二次警示确认机制",
+    "isCustom": false
+  },
+  {
+    "id": "preset_interact_anim",
+    "title": "⚡ 交互体验提升",
+    "prompt": "请优化【信标 1】的悬浮反馈、点击交互动效与平滑过渡效果",
+    "isCustom": false
+  },
+  {
+    "id": "preset_api_link",
+    "title": "🔌 接口数据联调",
+    "prompt": "请将【信标 1】对接后端业务接口，并实现数据联动刷新与异常处理",
+    "isCustom": false
+  },
+  {
+    "id": "preset_refactor",
+    "title": "📐 架构组件重构",
+    "prompt": "请将【信标 1】重构抽离为高内聚、易维护的独立子组件，并完善 Props 与 Emits 定义",
+    "isCustom": false
+  },
+  {
+    "id": "preset_empty_skeleton",
+    "title": "⏳ 骨架屏与空态",
+    "prompt": "请为【信标 1】增加加载中骨架屏与数据为空时的引导插画占位",
+    "isCustom": false
+  },
+  {
+    "id": "preset_debug_fix",
+    "title": "🐞 缺陷排查修复",
+    "prompt": "请排查修复【信标 1】的控制台异常报警、边界条件处理与逻辑缺陷",
+    "isCustom": false
+  }
+]

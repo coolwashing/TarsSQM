@@ -1,0 +1,11 @@
+{
+  "table_name": "sqm_supplier",
+  "title": "供应商主数据表架构设计 (测试更新)",
+  "business_module": "供应商生命周期管理 (SRM / SQM)",
+  "description": "管理汽车与工业零部件供应商全生命周期主数据，包含资质评级、体系认证与准入状态机。",
+  "author": "质量系统架构团队",
+  "version": "1.1.0",
+  "updated_at": "2026-10-31 21:42:06",
+  "html_content": "<h2>1. 业务定位与核心场景</h2><p><strong>sqm_supplier</strong> 是质量管理系统（SQM）的基石主数据表。系统内所有零件开发、试制送样、进货检验（IQC）、出货检验（OQC）以及 8D 质量索赔均强关联至该表。</p><h2>2. 状态机与准入生命周期</h2><ul><li><strong>潜在：</strong>初步登记或飞书同步，未经过体系审核。</li><li><strong>考察：</strong>技术/质量团队正在执行现场验厂或 VDA 6.3 审核。</li><li><strong>合格：</strong>准入审核通过，具备正式下发采购订单与送样资格。</li><li><strong>冻结：</strong>发生重大质量事故或配合度极低，系统红线阻断后续新项目定点。</li></ul><h2>3. 核心字段与索引设计</h2><ul><li><code>id</code> (INT, PK)：物理自增主键。</li><li><code>code</code> (VARCHAR 64, UNIQUE)：供应商唯一编码，如 <code>SUP-001</code>，支持 ERP 编码对接。</li><li><code>name</code> (VARCHAR 128)：供应商工商登记注册全称。</li><li><code>status</code> (VARCHAR 32)：准入状态（潜在/考察/合格/冻结）。</li><li><code>quality_system</code> (VARCHAR 255)：质量体系认证（如 IATF16949 / ISO9001 / ISO14001）。</li><li><code>profile_html</code> (LONGTEXT)：Tiptap 维护的供应商图文深度履历档案。</li></ul><h2>4. 上下游数据关联模型</h2><ul><li><strong>上游：</strong>采购寻源、外部飞书多维表格（<code>/api/main/suppliers/import/feishu</code>）自动化同步。</li><li><strong>下游 1:N 关系：</strong>关联零件 APQP 开发表（<code>sqm_part_dev.supplier_id</code>）、质量异议（<code>sqm_quality_issue.supplier_id</code>）。</li></ul><h2>5. 质量审计与合规说明</h2><p>供应商准入状态变更与降级需记录操作人与审计日志，冻结状态供应商严禁发起 OTS 样品转量产评审。</p><p><strong>自动化测试追加架构修订记录</strong></p><p><strong>自动化测试追加架构修订记录</strong></p><p><strong>自动化测试追加架构修订记录</strong></p><p><strong>自动化测试追加架构修订记录</strong></p><p><strong>自动化测试追加架构修订记录</strong></p><p><strong>自动化测试追加架构修订记录</strong></p><p><strong>自动化测试追加架构修订记录</strong></p><p><strong>自动化测试追加架构修订记录</strong></p><p><strong>自动化测试追加架构修订记录</strong></p>",
+  "markdown_content": "# sqm_supplier 供应商主数据表架构设计\n\n## 业务定位\n供应商全生命周期管理核心表。"
+}

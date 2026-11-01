@@ -11,6 +11,7 @@
       @refresh="fetchData"
       @page-change="handlePageChange"
       @size-change="handleSizeChange"
+      @cell-change="handleCellChange"
     >
       <!-- 顶部检索插槽 -->
       <template #search>
@@ -193,7 +194,7 @@ import { Search, Refresh, Plus, Edit, Delete, Document } from '@element-plus/ico
 import { ElMessage } from 'element-plus'
 import axios from 'axios'
 import DataTable from '@/components/common/DataTable/index.vue'
-import type { TableColumn } from '@/components/common/DataTable/types'
+import type { TableColumn, CellChangeEvent } from '@/components/common/DataTable/types'
 import SupplierForm from './SupplierForm.vue'
 
 interface SupplierRow {
@@ -292,12 +293,12 @@ const columns: TableColumn[] = [
       { text: '低', value: '低' }
     ]
   },
-  { prop: 'city', label: '城市', width: 95, sortable: true },
+  { prop: 'city', label: '城市', width: 95, sortable: true, editable: true },
   { prop: 'quality_system', label: '质量体系', width: 140 },
-  { prop: 'contact', label: '联络人', width: 110, sortable: true },
-  { prop: 'phone', label: '联系电话', width: 130 },
-  { prop: 'address', label: '办公/工厂地址', minWidth: 200 },
-  { prop: 'created_at', label: '登记时间', width: 160, sortable: true }
+  { prop: 'contact', label: '联络人', width: 110, sortable: true, editable: true },
+  { prop: 'phone', label: '联系电话', width: 130, editable: true },
+  { prop: 'address', label: '办公/工厂地址', minWidth: 200, editable: true },
+  { prop: 'created_at', label: '登记时间', width: 130, sortable: true, dataType: 'date' }
 ]
 
 const getStatusTagType = (status: string) => {
@@ -406,6 +407,15 @@ const handleDelete = async (row: SupplierRow) => {
     fetchData()
   } catch (err: any) {
     ElMessage.error(`删除失败: ${err.response?.data?.detail || err.message}`)
+  }
+}
+
+const handleCellChange = async ({ row, prop, value, oldValue }: CellChangeEvent) => {
+  try {
+    await axios.put(`/api/maindata/suppliers/${row.id}`, { [prop]: value })
+  } catch (err: any) {
+    row[prop] = oldValue
+    ElMessage.error(`行内修改保存失败: ${err.response?.data?.detail || err.message}`)
   }
 }
 

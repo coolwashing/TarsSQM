@@ -1,0 +1,11 @@
+{
+  "table_name": "sqm_kb_doc",
+  "title": "质量知识库与技术文档表架构设计",
+  "business_module": "工程知识管理与质量标准库 (KB / RAG)",
+  "description": "基于无限层级树形自关联结构存储企业质量规程、检验作业指导书（SOP/WI）、失效分析案例（FMEA）与Tiptap富文本内容。",
+  "author": "质量系统架构团队",
+  "version": "1.0.0",
+  "updated_at": "2026-10-31 19:25:00",
+  "html_content": "<h2>1. 业务定位与核心场景</h2><p><strong>sqm_kb_doc</strong> 是企业质量管理知识库（Knowledge Base）与技术规程的数字化核心存储表。支持仿 Windows 资源管理器的多级文件夹树、Tiptap 富文本技术图表，并面向大模型 RAG（检索增强生成）预留了纯文本清洗向量化通道。</p><h2>2. 树形自关联物理结构</h2><ul><li><code>id</code> (INT, PK)：节点物理主键。</li><li><code>parent_id</code> (INT, FK)：自关联指向 <code>sqm_kb_doc.id</code>，根目录节点为 <code>NULL</code>，支持级联删除与整树拖拽重排。</li><li><code>is_folder</code> (TINYINT/BOOLEAN)：标识是分类目录还是叶子内容文档。</li><li><code>sort_order</code> (INT)：同级子节点的自定义拖拽显示权重。</li></ul><h2>3. 富文本与智能检索解耦</h2><ul><li><code>content_html</code> (LONGTEXT)：保留完整的 Tiptap 排版、公差矩阵表格、图文说明，供前端高质量渲染。</li><li><code>content_text</code> (LONGTEXT)：提取的纯净文本字符，专供本地分词、关键词匹配与 AI 向量嵌入（Embeddings）。</li></ul><h2>4. 业务模块挂接与分类</h2><ul><li><code>biz_type</code> / <code>biz_id</code>：支持将检验规范绑定至具体供应商（SUPPLIER）或零件（PART）。</li><li><code>status</code>：支持文档受控生命周期（DRAFT 草稿 / REVIEW 审核中 / ACTIVE 受控发布 / OBSOLETE 已作废）。</li></ul>",
+  "markdown_content": "# sqm_kb_doc 质量知识库表架构设计\n\n## 业务定位\n工程知识管理与无限层级文档树。"
+}

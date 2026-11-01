@@ -43,6 +43,26 @@ const routes: RouteRecordRaw[] = [
     name: 'CTQList',
     component: () => import('@/views/3_ctq/3.1_ctq/CTQList.vue'),
     meta: { title: '关键特征清单' }
+  },
+  // 质量知识库模块
+  {
+    path: '/kb/docs',
+    name: 'KnowledgeBase',
+    component: () => import('@/views/4_kb/KnowledgeBase.vue'),
+    meta: { title: '质量知识库' }
+  },
+  {
+    path: '/kb/editor/:id',
+    name: 'KbDocEditor',
+    component: () => import('@/views/4_kb/DocEditorPage.vue'),
+    meta: { title: '质量规程文档编辑' }
+  },
+  // 研发与数据工作台
+  {
+    path: '/dev/database',
+    name: 'DatabaseStudio',
+    component: () => import('@/views/5_dev/DatabaseStudio.vue'),
+    meta: { title: '数据库工作台' }
   }
 ]
 

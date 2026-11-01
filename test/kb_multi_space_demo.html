@@ -1,0 +1,1380 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SQM 质量知识库 - 多项目空间与结构化组合 Demo</title>
+  <style>
+    :root {
+      --primary: #4f46e5;
+      --primary-hover: #4338ca;
+      --primary-light: #eef2ff;
+      --primary-border: #c7d2fe;
+      --success: #059669;
+      --success-light: #ecfdf5;
+      --warning: #d97706;
+      --warning-light: #fffbeb;
+      --text-main: #0f172a;
+      --text-regular: #334155;
+      --text-secondary: #64748b;
+      --text-dim: #94a3b8;
+      --bg-body: #f8fafc;
+      --bg-sidebar: #fbfcfd;
+      --bg-canvas: #ffffff;
+      --border-color: #e2e8f0;
+      --border-light: #f1f5f9;
+      --nav-dark: #0f172a;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+      color: var(--text-main);
+      background-color: var(--bg-body);
+      height: 100vh;
+      overflow: hidden;
+      display: flex;
+    }
+
+    /* 1. 最左侧系统主导航 (SQM 系统基底) */
+    .system-nav {
+      width: 60px;
+      background: var(--nav-dark);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 14px 0;
+      flex-shrink: 0;
+      border-right: 1px solid #1e293b;
+      z-index: 20;
+    }
+    .sys-logo {
+      width: 36px;
+      height: 36px;
+      border-radius: 9px;
+      background: linear-gradient(135deg, #4f46e5, #7c3aed);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #fff;
+      font-weight: 700;
+      font-size: 15px;
+      margin-bottom: 22px;
+      cursor: pointer;
+      box-shadow: 0 4px 12px rgba(79, 70, 229, 0.35);
+    }
+    .sys-nav-item {
+      width: 44px;
+      height: 44px;
+      border-radius: 8px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      color: #94a3b8;
+      cursor: pointer;
+      margin-bottom: 10px;
+      transition: all 0.15s ease;
+      font-size: 10px;
+      gap: 3px;
+    }
+    .sys-nav-item:hover {
+      background: rgba(255, 255, 255, 0.08);
+      color: #f8fafc;
+    }
+    .sys-nav-item.active {
+      background: rgba(79, 70, 229, 0.25);
+      color: #818cf8;
+      font-weight: 600;
+    }
+
+    /* 2. 知识库多空间与结构树栏 */
+    .kb-tree-sidebar {
+      width: 310px;
+      background: var(--bg-sidebar);
+      border-right: 1px solid var(--border-color);
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+      user-select: none;
+      position: relative;
+    }
+
+    /* 2.1 空间切换器卡片 (核心特色 1) */
+    .space-selector-box {
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--border-color);
+      background: #ffffff;
+    }
+    .space-header-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 8px;
+    }
+    .space-label {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .space-dropdown-btn {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 7px 10px;
+      background: var(--bg-body);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-main);
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .space-dropdown-btn:hover {
+      border-color: #818cf8;
+      background: #ffffff;
+      box-shadow: 0 1px 4px rgba(79, 70, 229, 0.08);
+    }
+    .space-btn-left {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .space-badge {
+      font-size: 10px;
+      font-weight: normal;
+      padding: 1px 6px;
+      border-radius: 4px;
+      background: #e2e8f0;
+      color: #475569;
+    }
+    .space-badge.proj {
+      background: var(--primary-light);
+      color: var(--primary);
+    }
+
+    /* 空间下拉菜单弹层 */
+    .space-menu-popover {
+      display: none;
+      position: absolute;
+      top: 60px;
+      left: 12px;
+      width: 286px;
+      background: #ffffff;
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      box-shadow: 0 10px 25px rgba(15, 23, 42, 0.15);
+      z-index: 50;
+      padding: 6px;
+    }
+    .space-menu-popover.show {
+      display: block;
+      animation: fadeIn 0.15s ease-out;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(-4px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .space-menu-group-title {
+      font-size: 10.5px;
+      color: var(--text-dim);
+      padding: 6px 8px 3px 8px;
+      font-weight: 600;
+    }
+    .space-menu-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 10px;
+      border-radius: 6px;
+      font-size: 12.5px;
+      cursor: pointer;
+      color: var(--text-regular);
+      transition: all 0.12s;
+    }
+    .space-menu-item:hover {
+      background: var(--bg-body);
+      color: var(--primary);
+    }
+    .space-menu-item.active {
+      background: var(--primary-light);
+      color: var(--primary);
+      font-weight: 600;
+    }
+    .space-menu-divider {
+      height: 1px;
+      background: var(--border-light);
+      margin: 4px 0;
+    }
+    .space-menu-add-btn {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      width: 100%;
+      padding: 8px 10px;
+      background: transparent;
+      border: 1px dashed var(--border-color);
+      border-radius: 6px;
+      color: var(--primary);
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      margin-top: 4px;
+      transition: all 0.15s;
+    }
+    .space-menu-add-btn:hover {
+      background: var(--primary-light);
+      border-color: var(--primary-border);
+    }
+
+    /* 2.2 搜索与快速动作栏 */
+    .tree-action-bar {
+      padding: 10px 14px 6px 14px;
+      display: flex;
+      gap: 6px;
+    }
+    .tree-search-input {
+      flex: 1;
+      height: 30px;
+      background: #ffffff;
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      padding: 0 8px;
+      font-size: 12px;
+      outline: none;
+      transition: all 0.15s;
+    }
+    .tree-search-input:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.12);
+    }
+    .tree-btn {
+      height: 30px;
+      padding: 0 10px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 500;
+      border: 1px solid var(--border-color);
+      background: #ffffff;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      color: var(--text-regular);
+      transition: all 0.15s;
+    }
+    .tree-btn:hover {
+      border-color: var(--primary);
+      color: var(--primary);
+      background: var(--primary-light);
+    }
+    .tree-btn.primary {
+      background: var(--primary);
+      color: #fff;
+      border-color: var(--primary);
+    }
+    .tree-btn.primary:hover {
+      background: var(--primary-hover);
+    }
+
+    /* 视图模式切换（按文件夹树 / 按项目结构维度 / 按引用关系） */
+    .tree-view-mode-tabs {
+      display: flex;
+      padding: 4px 14px 8px 14px;
+      gap: 6px;
+      border-bottom: 1px solid var(--border-light);
+    }
+    .mode-tab {
+      flex: 1;
+      text-align: center;
+      padding: 3px 0;
+      font-size: 11px;
+      border-radius: 5px;
+      cursor: pointer;
+      color: var(--text-secondary);
+      background: transparent;
+      transition: all 0.15s;
+    }
+    .mode-tab.active {
+      background: #ffffff;
+      color: var(--primary);
+      font-weight: 600;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+    }
+
+    /* 2.3 树型节点主体 (支持拖拽、展开、引用标识) */
+    .tree-body {
+      flex: 1;
+      overflow-y: auto;
+      padding: 8px 6px;
+    }
+    .tree-node {
+      display: flex;
+      align-items: center;
+      padding: 5px 8px;
+      border-radius: 6px;
+      cursor: pointer;
+      margin-bottom: 2px;
+      font-size: 12.5px;
+      color: var(--text-regular);
+      transition: all 0.12s;
+      position: relative;
+    }
+    .tree-node:hover {
+      background: rgba(15, 23, 42, 0.04);
+      color: var(--text-main);
+    }
+    .tree-node.active {
+      background: var(--primary-light);
+      color: var(--primary);
+      font-weight: 600;
+    }
+    .tree-node.drag-over {
+      background: #e0e7ff;
+      border: 1px dashed var(--primary);
+    }
+    .node-indent {
+      width: 14px;
+      flex-shrink: 0;
+    }
+    .node-arrow {
+      width: 16px;
+      text-align: center;
+      font-size: 10px;
+      color: var(--text-dim);
+      margin-right: 2px;
+      cursor: pointer;
+      transition: transform 0.15s ease;
+    }
+    .node-arrow.expanded {
+      transform: rotate(90deg);
+    }
+    .node-icon {
+      margin-right: 6px;
+      font-size: 14px;
+      flex-shrink: 0;
+    }
+    .node-title {
+      flex: 1;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .node-link-pill {
+      font-size: 9.5px;
+      padding: 1px 5px;
+      border-radius: 4px;
+      background: #ecfdf5;
+      color: #059669;
+      border: 1px solid #a7f3d0;
+      margin-left: 4px;
+      flex-shrink: 0;
+    }
+    .node-actions {
+      display: none;
+      align-items: center;
+      gap: 2px;
+      margin-left: 4px;
+    }
+    .tree-node:hover .node-actions {
+      display: flex;
+    }
+    .node-action-btn {
+      width: 18px;
+      height: 18px;
+      border-radius: 3px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      color: var(--text-dim);
+      cursor: pointer;
+    }
+    .node-action-btn:hover {
+      color: var(--primary);
+      background: rgba(0,0,0,0.05);
+    }
+
+    /* 树底部提示 */
+    .tree-footer-tip {
+      padding: 8px 12px;
+      border-top: 1px solid var(--border-color);
+      font-size: 11px;
+      color: var(--text-dim);
+      background: #ffffff;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    /* 3. 中间正文区 (飞书白纸通透质感) */
+    .kb-main-workspace {
+      flex: 1;
+      background: #ffffff;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* 3.1 顶栏：面包屑、多项目标签、状态与操作 */
+    .workspace-top-bar {
+      height: 48px;
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 20px;
+      background: #ffffff;
+      flex-shrink: 0;
+    }
+    .bar-left {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      overflow: hidden;
+    }
+    .breadcrumb-item {
+      font-size: 12.5px;
+      color: var(--text-secondary);
+      white-space: nowrap;
+    }
+    .breadcrumb-item.active {
+      color: var(--text-main);
+      font-weight: 600;
+    }
+    .crumb-sep {
+      color: var(--text-dim);
+      font-size: 11px;
+    }
+    .project-binding-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      font-size: 11px;
+      color: #6366f1;
+      background: #f5f3ff;
+      border: 1px solid #c7d2fe;
+      padding: 1px 7px;
+      border-radius: 12px;
+      margin-left: 6px;
+    }
+
+    .bar-right {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .save-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 12px;
+      color: var(--success);
+      background: var(--success-light);
+      border: 1px solid #a7f3d0;
+      padding: 3px 9px;
+      border-radius: 12px;
+      white-space: nowrap;
+    }
+    .bar-btn {
+      height: 30px;
+      padding: 0 12px;
+      border-radius: 6px;
+      font-size: 12px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      border: 1px solid var(--border-color);
+      background: #ffffff;
+      color: var(--text-regular);
+      transition: all 0.15s;
+    }
+    .bar-btn:hover {
+      border-color: var(--primary);
+      color: var(--primary);
+      background: var(--primary-light);
+    }
+    .bar-btn.ai-btn {
+      background: linear-gradient(135deg, #4f46e5, #7c3aed);
+      color: #fff;
+      border: none;
+      font-weight: 500;
+    }
+    .bar-btn.ai-btn:hover {
+      opacity: 0.92;
+      box-shadow: 0 2px 8px rgba(124, 58, 237, 0.3);
+    }
+
+    /* 3.2 软引用横幅 (跨项目组合核心亮点) */
+    .soft-link-banner {
+      background: #f0fdf4;
+      border-bottom: 1px solid #bbf7d0;
+      padding: 8px 24px;
+      font-size: 12px;
+      color: #166534;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .banner-left {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .banner-btn {
+      font-size: 11px;
+      color: #15803d;
+      text-decoration: underline;
+      cursor: pointer;
+      background: none;
+      border: none;
+    }
+
+    /* 3.3 文档正文画布 */
+    .editor-canvas-wrap {
+      flex: 1;
+      overflow-y: auto;
+      padding: 36px 60px 80px 60px;
+      max-width: 960px;
+      margin: 0 auto;
+      width: 100%;
+    }
+    .doc-header-area {
+      margin-bottom: 24px;
+      border-bottom: 1px solid var(--border-light);
+      padding-bottom: 16px;
+    }
+    .doc-icon-large {
+      font-size: 38px;
+      line-height: 1;
+      margin-bottom: 8px;
+      cursor: pointer;
+    }
+    .doc-title-input {
+      font-size: 28px;
+      font-weight: 700;
+      color: var(--text-main);
+      border: none;
+      outline: none;
+      width: 100%;
+      line-height: 1.3;
+      padding: 4px 0;
+    }
+    .doc-meta-capsules {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 10px;
+      flex-wrap: wrap;
+    }
+    .meta-capsule {
+      font-size: 11.5px;
+      color: var(--text-secondary);
+      background: var(--bg-body);
+      border: 1px solid var(--border-color);
+      padding: 2px 8px;
+      border-radius: 12px;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    /* 正文排版 */
+    .doc-content-body {
+      font-size: 14.5px;
+      line-height: 1.75;
+      color: #1f2937;
+    }
+    .doc-content-body h2 {
+      font-size: 18px;
+      margin: 24px 0 12px 0;
+      color: #0f172a;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .doc-content-body p {
+      margin-bottom: 12px;
+    }
+    .doc-content-body ul, .doc-content-body ol {
+      padding-left: 20px;
+      margin-bottom: 14px;
+    }
+    .doc-content-body li {
+      margin-bottom: 6px;
+    }
+    .doc-alert-box {
+      border-left: 4px solid var(--primary);
+      background: var(--primary-light);
+      padding: 12px 16px;
+      border-radius: 4px;
+      margin: 16px 0;
+      font-size: 13.5px;
+      color: #312e81;
+    }
+
+    /* 4. 右侧可收起的大纲面板 (TOC) */
+    .kb-toc-panel {
+      width: 220px;
+      background: #fafbfc;
+      border-left: 1px solid var(--border-color);
+      padding: 16px 14px;
+      flex-shrink: 0;
+      overflow-y: auto;
+    }
+    .toc-title {
+      font-size: 11.5px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      margin-bottom: 12px;
+      text-transform: uppercase;
+    }
+    .toc-item {
+      font-size: 12px;
+      color: var(--text-secondary);
+      padding: 4px 6px;
+      border-radius: 4px;
+      cursor: pointer;
+      margin-bottom: 4px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      transition: all 0.12s;
+    }
+    .toc-item:hover {
+      background: var(--primary-light);
+      color: var(--primary);
+    }
+    .toc-item.level-2 {
+      padding-left: 14px;
+      font-size: 11.5px;
+    }
+
+    /* 弹窗通用样式 (新建空间 / 引用文档) */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.45);
+      backdrop-filter: blur(2px);
+      z-index: 100;
+      align-items: center;
+      justify-content: center;
+    }
+    .modal-overlay.open {
+      display: flex;
+    }
+    .modal-card {
+      background: #ffffff;
+      border-radius: 12px;
+      width: 520px;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+      overflow: hidden;
+      animation: modalPop 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    @keyframes modalPop {
+      from { transform: scale(0.96); opacity: 0; }
+      to { transform: scale(1); opacity: 1; }
+    }
+    .modal-header {
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-weight: 600;
+      font-size: 14px;
+    }
+    .modal-close {
+      cursor: pointer;
+      color: var(--text-dim);
+      font-size: 16px;
+    }
+    .modal-body {
+      padding: 18px;
+    }
+    .modal-field {
+      margin-bottom: 14px;
+    }
+    .modal-field label {
+      display: block;
+      font-size: 12px;
+      color: var(--text-secondary);
+      font-weight: 500;
+      margin-bottom: 6px;
+    }
+    .modal-field input, .modal-field select, .modal-field textarea {
+      width: 100%;
+      padding: 8px 10px;
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      font-size: 13px;
+      outline: none;
+      font-family: inherit;
+    }
+    .modal-field input:focus, .modal-field select:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.12);
+    }
+    .modal-footer {
+      padding: 12px 18px;
+      background: #f8fafc;
+      border-top: 1px solid var(--border-color);
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+    }
+
+    /* 引用文档列表 */
+    .ref-doc-list {
+      max-height: 240px;
+      overflow-y: auto;
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      padding: 4px;
+    }
+    .ref-doc-row {
+      display: flex;
+      align-items: center;
+      padding: 7px 10px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12.5px;
+      justify-content: space-between;
+    }
+    .ref-doc-row:hover {
+      background: var(--primary-light);
+    }
+    .ref-doc-row.selected {
+      background: var(--primary-light);
+      color: var(--primary);
+      font-weight: 600;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- 1. 最左侧系统导航 -->
+  <aside class="system-nav">
+    <div class="sys-logo" title="TARS SQM 平台">T</div>
+    <div class="sys-nav-item" title="供应商主数据">📁<span>主数据</span></div>
+    <div class="sys-nav-item" title="质量管理">🛡️<span>质量</span></div>
+    <div class="sys-nav-item" title="关键质量特性">🎯<span>CTQ</span></div>
+    <div class="sys-nav-item active" title="质量知识库">📚<span>知识库</span></div>
+  </aside>
+
+  <!-- 2. 知识库目录侧边栏 (带多项目空间切换与拖拽重组) -->
+  <aside class="kb-tree-sidebar">
+    <!-- 空间切换器 -->
+    <div class="space-selector-box">
+      <div class="space-header-row">
+        <span class="space-label">🗂️ 知识库空间 (Space)</span>
+        <span style="font-size: 11px; color: var(--primary); cursor: pointer;" onclick="openNewSpaceModal()">+ 新建空间</span>
+      </div>
+      <button class="space-dropdown-btn" onclick="toggleSpaceMenu()">
+        <div class="space-btn-left">
+          <span id="currentSpaceIcon">🤖</span>
+          <span id="currentSpaceName">协作机器人项目 (Robo-X)</span>
+          <span class="space-badge proj" id="currentSpaceBadge">项目专库</span>
+        </div>
+        <span style="font-size: 10px; color: #94a3b8;">▼</span>
+      </button>
+    </div>
+
+    <!-- 空间下拉弹层 -->
+    <div class="space-menu-popover" id="spaceMenuPopover">
+      <div class="space-menu-group-title">通用知识资产</div>
+      <div class="space-menu-item" onclick="switchSpace('common')">
+        <span>📚 通用质量标准库 (SQM-STD)</span>
+        <span class="space-badge">全员共享</span>
+      </div>
+
+      <div class="space-menu-group-title">项目专属结构库 (按项目/产品分类)</div>
+      <div class="space-menu-item active" onclick="switchSpace('robo-x')">
+        <span>🤖 协作机器人项目 (Robo-X)</span>
+        <span class="space-badge proj">活跃</span>
+      </div>
+      <div class="space-menu-item" onclick="switchSpace('chassis')">
+        <span>🚗 新能源底盘模组项目 (EV-Platform)</span>
+        <span class="space-badge proj">爬坡期</span>
+      </div>
+      <div class="space-menu-item" onclick="switchSpace('gearbox')">
+        <span>⚙️ 高精密RV减速机技术预研库</span>
+        <span class="space-badge">研发中</span>
+      </div>
+
+      <div class="space-menu-divider"></div>
+      <button class="space-menu-add-btn" onclick="openNewSpaceModal()">
+        <span>➕ 创建新项目知识库...</span>
+      </button>
+    </div>
+
+    <!-- 搜索与新建栏 -->
+    <div class="tree-action-bar">
+      <input type="text" class="tree-search-input" placeholder="按结构/标题/条款搜索..." id="treeSearchInput" oninput="handleSearch(this.value)">
+      <button class="tree-btn primary" onclick="addNewDocModal()" title="新建规范或结构文档">+ 文档</button>
+      <button class="tree-btn" onclick="openSoftLinkModal()" title="从其他库引入通用标准引用">🔗 引用</button>
+    </div>
+
+    <!-- 视图模式切换 -->
+    <div class="tree-view-mode-tabs">
+      <div class="mode-tab active" id="tab-struct" onclick="setTreeMode('struct')">📂 产品分解结构 (PBS)</div>
+      <div class="mode-tab" id="tab-custom" onclick="setTreeMode('custom')">📑 自由组合视图</div>
+    </div>
+
+    <!-- 树形节点主体 (支持拖拽) -->
+    <div class="tree-body" id="treeBody" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)">
+      <!-- 由 JS 动态渲染树形节点 -->
+    </div>
+
+    <!-- 树底提示 -->
+    <div class="tree-footer-tip">
+      <span id="treeStatsTip">共 4 个模块，8 篇关联文档</span>
+      <span style="cursor: pointer; color: var(--primary);" onclick="resetTreeDemo()" title="重置树结构">↺ 重置</span>
+    </div>
+  </aside>
+
+  <!-- 3. 中间文档主体画布 -->
+  <main class="kb-main-workspace">
+    <!-- 顶栏 -->
+    <div class="workspace-top-bar">
+      <div class="bar-left">
+        <span class="breadcrumb-item" id="crumbSpaceName">协作机器人项目 (Robo-X)</span>
+        <span class="crumb-sep">/</span>
+        <span class="breadcrumb-item" id="crumbModule">02_减速机与传动模组</span>
+        <span class="crumb-sep">/</span>
+        <span class="breadcrumb-item active" id="crumbTitle">RV-40E 摆线减速机安装公差与反向间隙</span>
+        <span class="project-binding-tag" id="docTag">📌 Robo-X 关键件</span>
+      </div>
+
+      <div class="bar-right">
+        <span class="save-badge">● 已同步云端</span>
+        <button class="bar-btn ai-btn" onclick="openAiCopilotDemo()">✨ AI 智写助手</button>
+        <button class="bar-btn" onclick="openSoftLinkModal()">🔗 关联至其他项目</button>
+        <button class="bar-btn" onclick="toggleToc()">📑 大纲</button>
+      </div>
+    </div>
+
+    <!-- 软引用横幅 (如果是跨项目引用的通用文档则展示) -->
+    <div class="soft-link-banner" id="softLinkBanner" style="display: none;">
+      <div class="banner-left">
+        <span>🔗 <strong>跨库标准软引用：</strong> 本文档为主规范 <em>《IQC 来料抽样检验基准表 (GB/T 2828.1)》</em> 在当前项目中的镜像引用。</span>
+      </div>
+      <div>
+        <button class="banner-btn" onclick="alert('已定位至通用标准库原始出处，修改将实时联动所有引用项目！')">查看原始主文档 ↗</button>
+      </div>
+    </div>
+
+    <!-- 编辑器画布正文 -->
+    <div class="editor-canvas-wrap">
+      <div class="doc-header-area">
+        <div class="doc-icon-large" id="docIcon">⚙️</div>
+        <input type="text" class="doc-title-input" id="docTitleInput" value="RV-40E 摆线减速机安装公差与反向间隙规程">
+        <div class="doc-meta-capsules">
+          <span class="meta-capsule">👤 编写人: 质量部-张建平</span>
+          <span class="meta-capsule">🕒 2026-10-31 09:40</span>
+          <span class="meta-capsule">🏷️ 模块: 关节传动系</span>
+          <span class="meta-capsule" style="color: #059669; background: #ecfdf5; border-color: #a7f3d0;">🎯 CTQ 关键特性对齐 (Cpk≥1.33)</span>
+        </div>
+      </div>
+
+      <div class="doc-content-body" id="docContentBody">
+        <div class="doc-alert-box">
+          <strong>工程结构红线说明：</strong><br>
+          该规程作为协作机器人第 1~3 轴（大负载摆动关节）的法定装配质量标准。重点控制针齿壳端面跳动与输入齿轮啮合间隙，直接决定末端重复定位精度（需稳定在 ±0.03mm 内）。
+        </div>
+
+        <h2>一、 核心配合公差尺寸矩阵</h2>
+        <p>减速机装配法兰必须采用三坐标进行端面垂直度测量，放行判定红线如下：</p>
+        <ul>
+          <li><strong>输入轴与电机同轴度</strong>：Φ0.015 mm MAX（实测偏差超过 0.02mm 触发停线报警）</li>
+          <li><strong>输出法兰端面跳动</strong>：≤ 0.008 mm，螺栓预紧扭矩 18.5 N·m（定扭扳手管控）</li>
+          <li><strong>空载反向间隙 (Backlash)</strong>：≤ 1.0 arcmin（采用高精度激光干涉仪首件确认）</li>
+        </ul>
+
+        <h2>二、 跨项目引用标准与 IQC 来料基准</h2>
+        <p>本项目标准直接复用 <em>通用标准库</em> 发布的进料质检准则，避免跨项目标准冲突与重复制定。</p>
+      </div>
+    </div>
+  </main>
+
+  <!-- 4. 右侧目录大纲 (TOC) -->
+  <aside class="kb-toc-panel" id="tocPanel">
+    <div class="toc-title">文档大纲</div>
+    <div class="toc-item">工程结构红线说明</div>
+    <div class="toc-item">一、 核心配合公差尺寸矩阵</div>
+    <div class="toc-item level-2">• 同轴度与端面跳动红线</div>
+    <div class="toc-item level-2">• 空载反向间隙要求</div>
+    <div class="toc-item">二、 跨项目引用标准与 IQC 基准</div>
+  </aside>
+
+  <!-- 5. 模态弹窗 1：创建新知识库空间 / 项目专库 -->
+  <div class="modal-overlay" id="newSpaceModal">
+    <div class="modal-card">
+      <div class="modal-header">
+        <span>➕ 创建新的知识库空间 / 项目库</span>
+        <span class="modal-close" onclick="closeNewSpaceModal()">✕</span>
+      </div>
+      <div class="modal-body">
+        <div class="modal-field">
+          <label>知识库空间类型：</label>
+          <select id="spaceTypeSelect" onchange="handleSpaceTypeChange(this.value)">
+            <option value="project">🚗 具体研发/量产项目专库 (含产品分解结构 PBS)</option>
+            <option value="standard">📚 部门/通用通用标准资产库 (跨项目共享)</option>
+            <option value="supplier">🏭 核心供应商专属协作库</option>
+          </select>
+        </div>
+        <div class="modal-field">
+          <label>空间/项目名称：</label>
+          <input type="text" id="newSpaceName" placeholder="例如：机械狗仿生动力总成项目库 (Quad-Power)">
+        </div>
+        <div class="modal-field">
+          <label>图标标识：</label>
+          <input type="text" id="newSpaceIcon" value="🐕" style="width: 80px;">
+        </div>
+        <div class="modal-field">
+          <label>自动预置工程模板结构：</label>
+          <select id="newSpaceTemplate">
+            <option value="robot">机器人整机 PBS (机构总成 + 电气控制 + 传动链 + 传感器)</option>
+            <option value="auto">汽车零部件标准 (开发SVP + 来料IQC + 过程制程 + 8D)</option>
+            <option value="blank">空白目录 (由工程师自由组合)</option>
+          </select>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="bar-btn" onclick="closeNewSpaceModal()">取消</button>
+        <button class="bar-btn ai-btn" onclick="submitCreateSpace()">确认创建空间</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 6. 模态弹窗 2：跨项目软引用现有文档 (组合核心) -->
+  <div class="modal-overlay" id="softLinkModal">
+    <div class="modal-card">
+      <div class="modal-header">
+        <span>🔗 引入跨项目 / 通用库文档 (软引用)</span>
+        <span class="modal-close" onclick="closeSoftLinkModal()">✕</span>
+      </div>
+      <div class="modal-body">
+        <p style="font-size: 12px; color: var(--text-secondary); margin-bottom: 12px;">
+          💡 <strong>软引用优势：</strong> 无需物理复制内容！直接将通用标准软挂载到当前项目目录下。源文档更新时，各项目自动同步最新版本。
+        </p>
+        <div class="modal-field">
+          <label>来源空间：</label>
+          <select id="refSourceSpace" onchange="renderRefDocList()">
+            <option value="common">📚 通用质量标准库 (SQM-STD)</option>
+            <option value="chassis">🚗 新能源底盘模组项目</option>
+          </select>
+        </div>
+        <div class="modal-field">
+          <label>选择要引用的标准或规程：</label>
+          <div class="ref-doc-list" id="refDocList">
+            <!-- 动态生成 -->
+          </div>
+        </div>
+        <div class="modal-field">
+          <label>挂载到当前项目的目标结构模块：</label>
+          <select id="refTargetFolder">
+            <option value="02">📁 02_减速机与传动模组</option>
+            <option value="01">📁 01_整机系统架构与指标清单</option>
+            <option value="03">📁 03_伺服驱动与动力单元</option>
+          </select>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="bar-btn" onclick="closeSoftLinkModal()">取消</button>
+        <button class="bar-btn ai-btn" onclick="confirmInsertSoftLink()">确认建立软引用</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // 1. 数据架构：支持多空间 (Spaces) 与多维文档引用
+    const spacesData = {
+      'robo-x': {
+        name: '协作机器人项目 (Robo-X)',
+        icon: '🤖',
+        badge: '项目专库',
+        tree: [
+          {
+            id: 'f1',
+            title: '01_整机系统架构与指标清单',
+            icon: '📁',
+            isFolder: true,
+            children: [
+              { id: 'd1_1', title: '整机机械接口与承载指标定义', icon: '📄', isLink: false, tag: '结构定义' },
+              { id: 'd1_2', title: '各轴行程限制与碰撞急停标准', icon: '📄', isLink: false, tag: '安全红线' }
+            ]
+          },
+          {
+            id: 'f2',
+            title: '02_减速机与传动模组',
+            icon: '📁',
+            isFolder: true,
+            children: [
+              { id: 'd2_1', title: 'RV-40E 摆线减速机安装公差与反向间隙', icon: '⚙️', isLink: false, active: true, tag: '关键件' },
+              { id: 'd2_2', title: '谐波减速机柔轮疲劳寿命测试规范', icon: '📄', isLink: false, tag: '耐久性' },
+              { id: 'd2_3', title: 'IQC 来料抽样检验基准表 (GB/T 2828.1)', icon: '📋', isLink: true, sourceSpace: '通用标准库', tag: '通用引用' }
+            ]
+          },
+          {
+            id: 'f3',
+            title: '03_伺服驱动与动力单元',
+            icon: '📁',
+            isFolder: true,
+            children: [
+              { id: 'd3_1', title: '永磁同步电机驱动器耐压与温升红线', icon: '⚡', isLink: false, tag: '电气' },
+              { id: 'd3_2', title: '绝对值编码器校零基准 SOP', icon: '📄', isLink: false, tag: '装配SOP' }
+            ]
+          },
+          {
+            id: 'f4',
+            title: '04_末端快换夹爪总成',
+            icon: '📁',
+            isFolder: true,
+            children: [
+              { id: 'd4_1', title: '夹爪气路气密性保压泄漏判定', icon: '🔧', isLink: false, tag: '气动' }
+            ]
+          }
+        ]
+      },
+
+      'common': {
+        name: '通用质量标准库 (SQM-STD)',
+        icon: '📚',
+        badge: '全员共享',
+        tree: [
+          {
+            id: 'cf1',
+            title: '01_供应商准入与审核管理',
+            icon: '📁',
+            isFolder: true,
+            children: [
+              { id: 'cd1_1', title: '供应商准入审核标准规范 (V2.0)', icon: '📄', isLink: false, tag: '体系认证' }
+            ]
+          },
+          {
+            id: 'cf2',
+            title: '02_来料检验 (IQC) 对齐基准',
+            icon: '📁',
+            isFolder: true,
+            children: [
+              { id: 'cd2_1', title: 'IQC 来料抽样检验基准表 (GB/T 2828.1)', icon: '📋', isLink: false, tag: '通用标准' },
+              { id: 'cd2_2', title: '精密金属结构件外观缺陷公差色卡', icon: '📄', isLink: false, tag: '外观标准' }
+            ]
+          },
+          {
+            id: 'cf3',
+            title: '03_关键质量特性 (CTQ) 控制规程',
+            icon: '📁',
+            isFolder: true,
+            children: [
+              { id: 'cd3_1', title: '减速机 CTQ 反向间隙控制规程', icon: '📄', isLink: false, tag: 'CTQ红线' }
+            ]
+          }
+        ]
+      },
+
+      'chassis': {
+        name: '新能源底盘模组项目 (EV-Platform)',
+        icon: '🚗',
+        badge: '项目专库',
+        tree: [
+          {
+            id: 'ev1',
+            title: '01_前副车架铸铝成型规范',
+            icon: '📁',
+            isFolder: true,
+            children: [
+              { id: 'evd1', title: '高压铸铝副车架 X-Ray 探伤气孔缺陷判定', icon: '📄', isLink: false, tag: '无损探伤' }
+            ]
+          },
+          {
+            id: 'ev2',
+            title: '02_悬架下摆臂球头总成',
+            icon: '📁',
+            isFolder: true,
+            children: [
+              { id: 'evd2', title: '球销脱出力与旋转扭矩监控基准', icon: '📄', isLink: false, tag: '安全件' }
+            ]
+          }
+        ]
+      }
+    };
+
+    let currentSpaceKey = 'robo-x';
+    let currentTreeMode = 'struct';
+    let draggedNodeId = null;
+
+    // 2. 渲染树结构 (支持拖拽 Drag & Drop 与软链接)
+    function renderTree() {
+      const space = spacesData[currentSpaceKey];
+      const container = document.getElementById('treeBody');
+      container.innerHTML = '';
+
+      let totalDocs = 0;
+
+      space.tree.forEach((folder, fIndex) => {
+        // 渲染文件夹节点
+        const fNode = document.createElement('div');
+        fNode.className = 'tree-node folder-node';
+        fNode.draggable = true;
+        fNode.dataset.id = folder.id;
+
+        fNode.innerHTML = `
+          <span class="node-arrow expanded" onclick="toggleFolder('${folder.id}', event)">▶</span>
+          <span class="node-icon">${folder.icon}</span>
+          <span class="node-title">${folder.title}</span>
+          <div class="node-actions">
+            <span class="node-action-btn" title="在该目录下新建文档" onclick="addDocInFolder('${folder.id}', event)">+</span>
+          </div>
+        `;
+
+        // 拖拽事件监听
+        setupDragEvents(fNode, folder.id);
+        container.appendChild(fNode);
+
+        // 渲染子文档列表
+        if (folder.children && folder.children.length > 0) {
+          const childrenContainer = document.createElement('div');
+          childrenContainer.id = `children-${folder.id}`;
+
+          folder.children.forEach(doc => {
+            totalDocs++;
+            const docNode = document.createElement('div');
+            docNode.className = `tree-node doc-node ${doc.active ? 'active' : ''}`;
+            docNode.draggable = true;
+            docNode.dataset.id = doc.id;
+            docNode.onclick = () => selectDoc(doc, folder.title);
+
+            let linkBadge = doc.isLink ? `<span class="node-link-pill" title="软引用自${doc.sourceSpace}">🔗 引用</span>` : '';
+
+            docNode.innerHTML = `
+              <span class="node-indent"></span>
+              <span class="node-icon">${doc.icon}</span>
+              <span class="node-title">${doc.title}</span>
+              ${linkBadge}
+              <div class="node-actions">
+                <span class="node-action-btn" title="移除或解绑" onclick="deleteDocItem('${folder.id}', '${doc.id}', event)">✕</span>
+              </div>
+            `;
+
+            setupDragEvents(docNode, doc.id);
+            childrenContainer.appendChild(docNode);
+          });
+
+          container.appendChild(childrenContainer);
+        }
+      });
+
+      document.getElementById('treeStatsTip').innerText = `共 ${space.tree.length} 个结构模块，${totalDocs} 篇关联文档`;
+    }
+
+    // 拖拽逻辑 (Drag & Drop 实现灵活结构换序与嵌套)
+    function setupDragEvents(el, id) {
+      el.ondragstart = (e) => {
+        draggedNodeId = id;
+        e.dataTransfer.setData('text/plain', id);
+        el.style.opacity = '0.5';
+      };
+      el.ondragend = () => {
+        el.style.opacity = '1';
+        document.querySelectorAll('.tree-node').forEach(n => n.classList.remove('drag-over'));
+      };
+      el.ondragover = (e) => {
+        e.preventDefault();
+        el.classList.add('drag-over');
+      };
+      el.ondragleave = () => {
+        el.classList.remove('drag-over');
+      };
+      el.ondrop = (e) => {
+        e.preventDefault();
+        el.classList.remove('drag-over');
+        if (draggedNodeId && draggedNodeId !== id) {
+          handleDropReorder(draggedNodeId, id);
+        }
+      };
+    }
+
+    function handleDropReorder(sourceId, targetId) {
+      alert(`✨ 成功将节点 [${sourceId}] 拖拽并重组嵌套至 [${targetId}]！\n实现了灵活的文件夹和文档结构自由组合。`);
+      renderTree();
+    }
+
+    function handleDragOver(e) { e.preventDefault(); }
+    function handleDragLeave(e) {}
+
+    // 3. 空间切换逻辑 (Space Switcher)
+    function toggleSpaceMenu() {
+      const pop = document.getElementById('spaceMenuPopover');
+      pop.classList.toggle('show');
+    }
+
+    function switchSpace(key) {
+      currentSpaceKey = key;
+      const space = spacesData[key];
+      document.getElementById('currentSpaceIcon').innerText = space.icon;
+      document.getElementById('currentSpaceName').innerText = space.name;
+      document.getElementById('currentSpaceBadge').innerText = space.badge;
+      document.getElementById('crumbSpaceName').innerText = space.name;
+
+      // 更新弹层项高亮
+      document.querySelectorAll('.space-menu-item').forEach(item => item.classList.remove('active'));
+      event.currentTarget.classList.add('active');
+
+      document.getElementById('spaceMenuPopover').classList.remove('show');
+      renderTree();
+    }
+
+    // 4. 选择文档与展示联动
+    function selectDoc(doc, moduleName) {
+      document.querySelectorAll('.doc-node').forEach(n => n.classList.remove('active'));
+      event.currentTarget.classList.add('active');
+
+      document.getElementById('crumbModule').innerText = moduleName;
+      document.getElementById('crumbTitle').innerText = doc.title;
+      document.getElementById('docTitleInput').value = doc.title;
+      document.getElementById('docIcon').innerText = doc.icon;
+      document.getElementById('docTag').innerText = `📌 ${doc.tag || '标准规程'}`;
+
+      const banner = document.getElementById('softLinkBanner');
+      if (doc.isLink) {
+        banner.style.display = 'flex';
+      } else {
+        banner.style.display = 'none';
+      }
+    }
+
+    // 5. 新建空间模态窗交互
+    function openNewSpaceModal() {
+      document.getElementById('spaceMenuPopover').classList.remove('show');
+      document.getElementById('newSpaceModal').classList.add('open');
+    }
+    function closeNewSpaceModal() {
+      document.getElementById('newSpaceModal').classList.remove('open');
+    }
+    function submitCreateSpace() {
+      const name = document.getElementById('newSpaceName').value.trim();
+      const icon = document.getElementById('newSpaceIcon').value.trim() || '📁';
+      if (!name) {
+        alert('请输入空间/项目名称');
+        return;
+      }
+      const newKey = 'space_' + Date.now();
+      spacesData[newKey] = {
+        name: name,
+        icon: icon,
+        badge: '自定义项目',
+        tree: [
+          {
+            id: 'init_f1',
+            title: '01_系统总体架构与技术要求',
+            icon: '📁',
+            isFolder: true,
+            children: [
+              { id: 'init_d1', title: `${name} 关键质量控制计划 (QCP)`, icon: '📄', isLink: false, tag: 'QCP' }
+            ]
+          }
+        ]
+      };
+      closeNewSpaceModal();
+      switchSpace(newKey);
+      alert(`🎉 项目知识库空间「${name}」创建成功！已根据工程模板预置结构树。`);
+    }
+
+    // 6. 软引用现有文档模态窗 (组合核心)
+    function openSoftLinkModal() {
+      renderRefDocList();
+      document.getElementById('softLinkModal').classList.add('open');
+    }
+    function closeSoftLinkModal() {
+      document.getElementById('softLinkModal').classList.remove('open');
+    }
+    function renderRefDocList() {
+      const container = document.getElementById('refDocList');
+      container.innerHTML = `
+        <div class="ref-doc-row selected" onclick="selectRefRow(this)">
+          <span>📋 IQC 来料抽样检验基准表 (GB/T 2828.1)</span>
+          <span style="font-size: 10px; color: #059669;">[全员通用]</span>
+        </div>
+        <div class="ref-doc-row" onclick="selectRefRow(this)">
+          <span>📄 供应商准入审核标准规范 (V2.0)</span>
+          <span style="font-size: 10px; color: #6366f1;">[审核标准]</span>
+        </div>
+        <div class="ref-doc-row" onclick="selectRefRow(this)">
+          <span>📊 精密金属结构件外观缺陷公差色卡</span>
+          <span style="font-size: 10px; color: #d97706;">[公差表]</span>
+        </div>
+      `;
+    }
+    function selectRefRow(el) {
+      document.querySelectorAll('.ref-doc-row').forEach(r => r.classList.remove('selected'));
+      el.classList.add('selected');
+    }
+    function confirmInsertSoftLink() {
+      const space = spacesData[currentSpaceKey];
+      const targetFolder = space.tree[1]; // 默认插入第2个文件夹
+      targetFolder.children.push({
+        id: 'link_' + Date.now(),
+        title: '精密金属结构件外观缺陷公差色卡 (软引用)',
+        icon: '📊',
+        isLink: true,
+        sourceSpace: '通用标准库',
+        tag: '外观标准'
+      });
+      closeSoftLinkModal();
+      renderTree();
+      alert('✅ 软引用建立成功！已跨库将通用外观标准挂载至当前项目减速机模组中。');
+    }
+
+    // 辅助功能
+    function toggleToc() {
+      const toc = document.getElementById('tocPanel');
+      toc.style.display = toc.style.display === 'none' ? 'block' : 'none';
+    }
+
+    function setTreeMode(mode) {
+      document.getElementById('tab-struct').classList.toggle('active', mode === 'struct');
+      document.getElementById('tab-custom').classList.toggle('active', mode === 'custom');
+      alert(mode === 'struct' ? '已切换至「产品分解结构 (PBS)」视图，按工程总成与部件对齐。' : '已切换至「自由组合」视图，支持自定义标签聚合。');
+    }
+
+    function openAiCopilotDemo() {
+      alert('✨ 唤出 AI 智写助手！自动提取当前项目「' + document.getElementById('crumbSpaceName').innerText + '」上下文，流式生成规程。');
+    }
+
+    function resetTreeDemo() {
+      renderTree();
+    }
+
+    // 点击其他区域关闭下拉菜单
+    window.addEventListener('click', (e) => {
+      const pop = document.getElementById('spaceMenuPopover');
+      const btn = document.querySelector('.space-dropdown-btn');
+      if (pop && !pop.contains(e.target) && !btn.contains(e.target)) {
+        pop.classList.remove('show');
+      }
+    });
+
+    // 初始化渲染
+    renderTree();
+  </script>
+</body>
+</html>

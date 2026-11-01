@@ -1,0 +1,11 @@
+{
+  "table_name": "sqm_ctq",
+  "title": "CTQ 关键质量特性表架构设计",
+  "business_module": "制程质量控制与统计过程控制 (SPC / CTQ)",
+  "description": "管理零部件的关键产品特性(KPC)与关键过程特性(KCC)、规格中心值、上下公差限、测量器具与检验频次。",
+  "author": "质量系统架构团队",
+  "version": "1.0.0",
+  "updated_at": "2026-10-31 19:25:00",
+  "html_content": "<h2>1. 业务定位与核心场景</h2><p><strong>sqm_ctq</strong> 是衡量零件与制程制造质量能力的核心标准定义表。系统通过数字化管理每一个关键控制尺寸、物理性能指标及公差带，为现场实测数据录入、SPC 走势分析（X-bar/R 控制图）与 CPK 计算提供基准依据。</p><h2>2. 特性类别划分</h2><ul><li><strong>KPC（Key Product Characteristic）：</strong>影响产品装配、安全或法规符合性的产品关键几何或物理特性（如销孔间距、轴承位同轴度）。</li><li><strong>KCC（Key Control Characteristic）：</strong>制造工序中必须严格受控的过程参数（如焊接熔深电流、热处理保温温度）。</li></ul><h2>3. 核心字段与量具公差定义</h2><ul><li><code>id</code> (INT, PK)：物理自增主键。</li><li><code>part_id</code> (INT, FK)：关联零件主数据 ID。</li><li><code>feature_code</code> (VARCHAR 64)：特性代号（如 KPC-01, DIM-05）。</li><li><code>feature_name</code> (VARCHAR 128)：特性描述（如法兰盘外径）。</li><li><code>standard_value</code> (DECIMAL/STRING)：工程标准名义值（如 45.00）。</li><li><code>usl</code> (DECIMAL/STRING)：规格上限（Upper Specification Limit）。</li><li><code>lsl</code> (DECIMAL/STRING)：规格下限（Lower Specification Limit）。</li><li><code>unit</code> (VARCHAR 16)：工程计量单位（mm, N·m, HRC, ℃ 等）。</li><li><code>measurement_tool</code> (VARCHAR 64)：推荐检测量仪（如三坐标测量仪 CMM、千分尺、粗糙度仪）。</li></ul><h2>4. 质量联动规约</h2><p>当实测数据超出 [LSL, USL] 公差边界时，系统触发品质异常警报，并建议关联生成质量纠正预防措施单（8D）。</p>",
+  "markdown_content": "# sqm_ctq 关键质量特性表架构设计\n\n## 业务定位\nKPC/KCC 特性与公差控制规范。"
+}

@@ -1,0 +1,11 @@
+{
+  "table_name": "alembic_version",
+  "title": "alembic_version 架构设计规范",
+  "business_module": "alembic_version",
+  "description": "关于 alembic_version 的物理架构与质量业务流程规范",
+  "author": "系统架构师",
+  "version": "1.0.0",
+  "updated_at": "2026-10-31 19:30:43",
+  "html_content": "<h2>1. 业务定位与核心场景</h2>\n<p><strong>alembic_version</strong>（alembic_version）是制造质量管理系统（SQM）中的重要业务实体，承载工程与供应链质量管控的数据流。</p>\n\n<h2>2. 核心架构与主键设计</h2>\n<ul>\n  <li><strong>物理表名：</strong><code>alembic_version</code></li>\n  <li><strong>业务定义：</strong>基础业务实体数据表</li>\n  <li><strong>存储引擎：</strong>InnoDB（行级锁，支持事务，字符集 utf8mb4）</li>\n</ul>\n\n<h2>3. 关键字段与业务约束</h2>\n<ul>\n<li><code>version_num</code> (varchar, 主键)：基础业务属性</li>\n</ul>\n\n<h2>4. 上下游数据流向与关联关系</h2>\n<p>本表在业务生命周期中与上下游业务模块保持强一致性联动：</p>\n<ul>\n  <li><strong>上游来源：</strong>主数据配置、ERP/MES 接口同步或现场作业录入。</li>\n  <li><strong>下游流向：</strong>统计过程控制（SPC）、质量检验、8D 闭环整改与溯源看板。</li>\n</ul>\n\n<h2>5. 质量合规与维护规约</h2>\n<p>所有对本表的写操作需遵循 APQP/PPAP 质量审计规范，核心业务变更均保留操作人与时间戳。</p>",
+  "markdown_content": "# alembic_version 架构设计规范\n\n## 业务定位\n\n"
+}

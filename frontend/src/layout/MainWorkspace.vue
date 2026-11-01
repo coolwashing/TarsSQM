@@ -1,7 +1,7 @@
 <template>
   <div class="workspace-wrapper">
-    <!-- Top Workspace Header -->
-    <header class="workspace-header">
+    <!-- Top Workspace Header (在全屏沉浸式页面如知识库下自动隐藏，消除双层顶栏) -->
+    <header class="workspace-header" v-if="!isFullBleedRoute">
       <div class="header-left">
         <span class="current-title">{{ currentTitle }}</span>
       </div>
@@ -14,7 +14,17 @@
           @click="openTeleprompter"
           title="点击或按 Alt+X 唤出 AI 提词器与 DOM 拾取器"
         >
-          开发套件：按 <kbd>Alt</kbd> + <kbd>X</kbd> 唤出 AI 提词器
+          开发套件：<kbd>Alt</kbd> + <kbd>X</kbd> 提词器
+        </el-tag>
+
+        <el-tag
+          type="primary"
+          effect="light"
+          class="teleprompter-badge clickable-badge schema-badge"
+          @click="openSchemaScaffolder"
+          title="点击或按 Alt+S 唤出数据字典与 UI 页面脚手架"
+        >
+          🛠️ 字段脚手架：<kbd>Alt</kbd> + <kbd>S</kbd>
         </el-tag>
 
         <div class="backend-status">
@@ -25,10 +35,10 @@
     </header>
 
     <!-- Main Content Area -->
-    <main class="workspace-main">
-      <router-view v-slot="{ Component }">
+    <main class="workspace-main" :class="{ 'is-full-bleed': isFullBleedRoute }">
+      <router-view v-slot="{ Component, route: currentRoute }">
         <transition name="fade" mode="out-in">
-          <component :is="Component" />
+          <component :is="Component" :key="currentRoute.fullPath" />
         </transition>
       </router-view>
     </main>
@@ -46,6 +56,12 @@ const isBackendOnline = ref(false)
 const openTeleprompter = () => {
   window.dispatchEvent(new CustomEvent('sqm:toggle-teleprompter'))
 }
+
+const openSchemaScaffolder = () => {
+  window.dispatchEvent(new CustomEvent('sqm:toggle-schema-scaffolder'))
+}
+
+const isFullBleedRoute = computed(() => route.path.startsWith('/kb'))
 
 const currentTitle = computed(() => {
   const raw = (route.meta?.title as string) || '工作台'
@@ -169,10 +185,13 @@ onMounted(() => {
   min-height: 0;
 }
 
+.workspace-main.is-full-bleed {
+  padding: 0;
+}
+
 .workspace-main > * {
   height: 100%;
-  display: flex;
-  flex-direction: column;
+  width: 100%;
   min-height: 0;
 }
 

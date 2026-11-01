@@ -1,0 +1,11 @@
+{
+  "table_name": "sqm_part",
+  "title": "零部件基础档案表架构设计",
+  "business_module": "制造工程与物料工程主数据",
+  "description": "存储产品所有零件、总成、外购件及外协件的物理图号、版本公差、分类层级与主关联项目。",
+  "author": "质量系统架构团队",
+  "version": "1.0.0",
+  "updated_at": "2026-10-31 19:25:00",
+  "html_content": "<h2>1. 业务定位与核心场景</h2><p><strong>sqm_part</strong> 是零部件质量控制的核心承载实体。连接设计工程（EBOM/MBOM）与质量检验控制计划（CP/QC Plan），是所有 CTQ 特性定义与试制开发（OTS）的父级实体。</p><h2>2. 核心字段与技术约束</h2><ul><li><code>id</code> (INT, PK)：自增物理主键。</li><li><code>part_number</code> (VARCHAR 64, UNIQUE)：零件唯一图号/物料编码。</li><li><code>name</code> (VARCHAR 128)：零件中文规范名称。</li><li><code>version</code> (VARCHAR 16)：当前受控图纸版本号（如 A.0, B.1）。</li><li><code>project_id</code> (INT, FK)：所属车型/工程项目主键（关联 <code>sqm_project.id</code>）。</li><li><code>category</code> (VARCHAR 32)：零件物料分类（冲压件/注塑件/电子电控/标准紧固件）。</li><li><code>is_ctq_key</code> (TINYINT/BOOLEAN)：是否属于安全件/关键质量特性件。</li></ul><h2>3. 数据上下游关联</h2><ul><li><strong>关联项目：</strong>外键关联 <code>sqm_project</code>，确定所属产品量产节点。</li><li><strong>下挂开发：</strong>1:N 关联 <code>sqm_part_dev</code>（一个零件可由多家供应商试制比选）。</li><li><strong>下挂 CTQ：</strong>1:N 关联 <code>sqm_ctq_line</code>（零件对应的关键尺寸与公差技术要求）。</li></ul><h2>4. 工程变更与版本管控</h2><p>零件图号版本变更（ECN/ECR）时，必须联动更新受控版本号，并提醒 SQE 确认新版本是否需要重新执行 PPAP 签署。</p>",
+  "markdown_content": "# sqm_part 零部件基础档案表架构设计\n\n## 业务定位\n零件主数据与图纸工程版本管控。"
+}

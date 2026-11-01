@@ -13,9 +13,9 @@
       <el-menu
         :default-active="activeRoute"
         :collapse="isCollapsed"
-        router
         class="custom-menu"
         :collapse-transition="false"
+        @select="handleMenuSelect"
       >
         <!-- MainData 主数据 -->
         <el-sub-menu index="1">
@@ -64,6 +64,22 @@
             <span>关键特征清单</span>
           </el-menu-item>
         </el-sub-menu>
+
+        <!-- 质量知识库 / 飞书文档规范 -->
+        <el-menu-item index="/kb/docs">
+          <el-icon><Notebook /></el-icon>
+          <template #title>
+            <span class="menu-title">质量知识库</span>
+          </template>
+        </el-menu-item>
+
+        <!-- 数据库工作台 / 数据字典与异机密码向导 -->
+        <el-menu-item index="/dev/database">
+          <el-icon><Coin /></el-icon>
+          <template #title>
+            <span class="menu-title">数据库工作台</span>
+          </template>
+        </el-menu-item>
       </el-menu>
     </el-scrollbar>
 
@@ -86,8 +102,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
-import { useRoute } from 'vue-router'
+import { ref, computed, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import {
   DataAnalysis,
   Folder,
@@ -99,14 +115,47 @@ import {
   WarningFilled,
   Aim,
   List,
+  Notebook,
+  Coin,
   Expand,
   Fold
 } from '@element-plus/icons-vue'
 
 const route = useRoute()
+const router = useRouter()
 const isCollapsed = ref(false)
 
-const activeRoute = computed(() => route.path)
+// 跟踪记忆各个核心业务模块退出时的最后子路由位置 (信标 1 & 信标 2 切换记忆)
+watch(
+  () => route.fullPath,
+  (newPath) => {
+    if (newPath.startsWith('/kb')) {
+      localStorage.setItem('sqm_last_kb_route', newPath)
+    } else if (newPath.startsWith('/dev/database')) {
+      localStorage.setItem('sqm_last_db_route', newPath)
+    }
+  },
+  { immediate: true }
+)
+
+const activeRoute = computed(() => {
+  if (route.path.startsWith('/kb')) return '/kb/docs'
+  return route.path
+})
+
+const handleMenuSelect = (index: string) => {
+  if (index === '/kb/docs') {
+    const target = localStorage.getItem('sqm_last_kb_route') || '/kb/docs'
+    router.push(target)
+    return
+  }
+  if (index === '/dev/database') {
+    const target = localStorage.getItem('sqm_last_db_route') || '/dev/database'
+    router.push(target)
+    return
+  }
+  router.push(index)
+}
 </script>
 
 <style scoped>

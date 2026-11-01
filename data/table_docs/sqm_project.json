@@ -1,0 +1,11 @@
+{
+  "table_name": "sqm_project",
+  "title": "新产品车型项目表架构设计",
+  "business_module": "整机/总成项目统筹与节点管控",
+  "description": "管理产品立项、所属平台/车型、量产时间节点（SOP）统筹与所有关联零件的总成清单映射。",
+  "author": "质量系统架构团队",
+  "version": "1.0.0",
+  "updated_at": "2026-10-31 19:25:00",
+  "html_content": "<h2>1. 业务定位与核心场景</h2><p><strong>sqm_project</strong> 统领所有制造零件与开发周期的母体工程项目。通过定义项目代号与关键里程碑（如 SOP 量产投产日期），驱动全生命周期质量爬坡与风险监控。</p><h2>2. 核心字段与技术约束</h2><ul><li><code>id</code> (INT, PK)：自增物理主键。</li><li><code>project_code</code> (VARCHAR 64, UNIQUE)：项目代号（如 PJ-2026-X01）。</li><li><code>name</code> (VARCHAR 128)：项目商业化名称。</li><li><code>platform</code> (VARCHAR 64)：所属基础架构或产品平台。</li><li><code>sop_date</code> (DATE)：量产节点预计投产日期。</li><li><code>status</code> (VARCHAR 32)：项目生命周期阶段（立项 / 开发中 / 量产 / 结束）。</li></ul><h2>3. 级联关系</h2><p>1:N 级联关联 <code>sqm_part</code>（零件主数据），项目删除或归档时提供完整的工程零部件清单快照。</p>",
+  "markdown_content": "# sqm_project 项目表架构设计\n\n## 业务定位\n新产品开发与量产SOP节点管控。"
+}

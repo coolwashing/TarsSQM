@@ -1,0 +1,11 @@
+{
+  "table_name": "sqm_part_dev",
+  "title": "零件开发管理实体架构设计",
+  "business_module": "新产品导入与试制管理 (NPI / APQP)",
+  "description": "管理零部件与供应商的双向绑定、试制进度（OTS/工装样件/PPAP/SOP）、送样与SQE评审状态。",
+  "author": "质量系统架构团队",
+  "version": "1.0.0",
+  "updated_at": "2026-10-31 19:25:00",
+  "html_content": "<h2>1. 业务定位与核心场景</h2><p><strong>sqm_part_dev</strong> 承载制造新项目导入阶段（NPI）的核心进度控制。通过建立 <code>sqm_part</code>（零件）与 <code>sqm_supplier</code>（供应商）的多对多业务映射，精确跟踪样件试制、工装验证与生产件批准程序（PPAP）。</p><h2>2. APQP 试制开发阶段流转</h2><ul><li><strong>OTS（工程样件）：</strong>手工/软模打样验证设计可行性与装配干涉。</li><li><strong>工装样件（Tooling Sample）：</strong>使用正式量产模具出样，验证尺寸稳定性。</li><li><strong>PPAP（生产件批准）：</strong>全尺寸检验报告、CPK能力分析、PSW保证书签署。</li><li><strong>SOP（量产爬坡）：</strong>转入批量生产，移交制造工厂与日常质量巡检。</li></ul><h2>3. 核心字段与索引约束</h2><ul><li><code>id</code> (INT, PK)：自增物理主键。</li><li><code>part_id</code> (INT, FK)：关联零件主数据 ID。</li><li><code>supplier_id</code> (INT, FK)：关联供应商主数据 ID。</li><li><code>dev_phase</code> (VARCHAR 32)：当前试制阶段（OTS / 工装样件 / PPAP / SOP）。</li><li><code>status</code> (VARCHAR 32)：审批状态（进行中 / 待评审 / 已批准 / 已冻结）。</li><li><code>target_date</code> (DATE)：当前试制目标完成节点。</li><li><code>sample_qty</code> (INT)：试制送检样件数量。</li><li><code>responsible</code> (VARCHAR 64)：主责 SQE / 质量工程师姓名。</li></ul><h2>4. 业务完整性与约束</h2><p>若供应商处于【冻结】准入状态，系统拦截新增开发绑定；PPAP 签署批准前，严禁发起量产入库检验。</p>",
+  "markdown_content": "# sqm_part_dev 零件开发管理架构设计\n\n## 业务定位\n零件APQP与试制节点管理。"
+}

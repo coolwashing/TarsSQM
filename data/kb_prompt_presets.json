@@ -1,0 +1,45 @@
+[
+  {
+    "id": "p_sop",
+    "name": "🏭 首件 SOP",
+    "prompt": "基于当前质量标准，编制车间首件检验操作规范与作业指导书(SOP)",
+    "is_system": true
+  },
+  {
+    "id": "p_ctq",
+    "name": "🎯 CTQ 红线",
+    "prompt": "提炼该产品关键质量特性 (CTQ) 的公差配合要求与现场放行判定红线",
+    "isCustom": false,
+    "is_system": true
+  },
+  {
+    "id": "p_8d",
+    "name": "🔧 8D 对策",
+    "prompt": "针对相关质量异常，编制 8D 根本原因鱼骨分析与永久纠正防范措施 (PCA)",
+    "is_system": true
+  },
+  {
+    "id": "p_iqc",
+    "name": "📋 IQC 抽样",
+    "prompt": "依据国标 GB/T 2828.1 制定该批次进料的正常/加严抽样方案与判定基准 (AQL)",
+    "is_system": true
+  },
+  {
+    "id": "p_pfmea",
+    "name": "⚠️ PFMEA",
+    "prompt": "分析全流程工艺潜在失效模式与后果，导出 PFMEA 严重度/频度/探测度清单",
+    "is_system": true
+  },
+  {
+    "id": "p_tolerance",
+    "name": "📊 公差表",
+    "prompt": "整理核心零部件尺寸配合公差、形位公差与测量量具标准数据表",
+    "is_system": true
+  },
+  {
+    "id": "p_custom_1793411643",
+    "name": "⚙️ 法兰首检",
+    "prompt": "针对机器人高精密法兰端面垂直度进行首件确认",
+    "is_system": false
+  }
+]

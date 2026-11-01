@@ -5,6 +5,8 @@
       <MainWorkspace />
       <!-- 全局挂载 AI 开发态提词器 (Alt+X 唤出，开发环境启用) -->
       <Teleprompter v-if="isDev" />
+      <!-- 全局挂载 数据字典与 UI 页面脚手架 (Alt+S 唤出，开发环境启用) -->
+      <SchemaScaffolderDialog v-if="isDev" />
     </div>
   </el-config-provider>
 </template>
@@ -15,6 +17,7 @@ import zhCn from 'element-plus/es/locale/lang/zh-cn'
 import LeftSidebar from '@/layout/LeftSidebar.vue'
 import MainWorkspace from '@/layout/MainWorkspace.vue'
 import Teleprompter from '@/components/dev/teleprompter/index.vue'
+import SchemaScaffolderDialog from '@/components/dev/schema/SchemaScaffolderDialog.vue'
 
 const isDev = import.meta.env.DEV
 </script>

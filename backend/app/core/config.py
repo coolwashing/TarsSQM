@@ -47,6 +47,12 @@ class Settings(BaseSettings):
     SERVER_HOST: str = "0.0.0.0"
     SERVER_PORT: int = 8010
 
+    # AI 智写与 RAG 检索大模型通用配置 (兼容 OpenAI / Ollama / DeepSeek / 通义千问等协议)
+    AI_API_BASE: str = "http://localhost:11434/v1"
+    AI_API_KEY: str = "ollama"
+    AI_MODEL: str = "qwen2.5:7b"
+    AI_TEMPERATURE: float = 0.3
+
     @property
     def SQLALCHEMY_DATABASE_URI(self) -> str:
         """
@@ -71,3 +77,47 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+
+
+def save_db_config_to_env(host: str, port: int, user: str, password: str, db_name: str) -> bool:
+    """
+    将用户在前端配置的数据库连接参数安全保存至本地 .env 文件
+    避免异机克隆后由于密码不一致导致无法连接
+    """
+    lines = []
+    if ENV_FILE.exists():
+        with open(ENV_FILE, "r", encoding="utf-8") as f:
+            lines = f.readlines()
+
+    keys_to_update = {
+        "DB_HOST": host,
+        "DB_PORT": str(port),
+        "DB_USER": user,
+        "DB_PASSWORD": password,
+        "DB_NAME": db_name
+    }
+
+    updated_keys = set()
+    new_lines = []
+    for line in lines:
+        stripped = line.strip()
+        if stripped and not stripped.startswith("#") and "=" in stripped:
+            key = stripped.split("=", 1)[0].strip()
+            if key in keys_to_update:
+                new_lines.append(f"{key}={keys_to_update[key]}\n")
+                updated_keys.add(key)
+                continue
+        new_lines.append(line)
+
+    for key, val in keys_to_update.items():
+        if key not in updated_keys:
+            new_lines.append(f"{key}={val}\n")
+
+    ENV_FILE.parent.mkdir(parents=True, exist_ok=True)
+    with open(ENV_FILE, "w", encoding="utf-8") as f:
+        f.writelines(new_lines)
+
+    # 重新载入全局 settings 实例
+    global settings
+    settings = Settings()
+    return True

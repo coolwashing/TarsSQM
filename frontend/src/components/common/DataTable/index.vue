@@ -22,7 +22,7 @@
               >
                 批量导入
               </el-button>
-              <el-tooltip content="下载该表的 Excel 标准填报模板" placement="top">
+              <el-tooltip content="下载该表的 Excel 标准填报模板" placement="top" :show-after="500">
                 <el-button
                   type="success"
                   plain
@@ -38,7 +38,7 @@
             <slot name="toolbar" />
 
             <!-- 刷新按钮 -->
-            <el-tooltip content="刷新数据" placement="top">
+            <el-tooltip content="刷新数据" placement="top" :show-after="500">
               <el-button
                 circle
                 :icon="Refresh"
@@ -132,12 +132,64 @@
               :sortable="col.sortable ?? true"
               :resizable="col.resizable ?? true"
               :show-overflow-tooltip="col.showOverflowTooltip ?? true"
-              :filters="col.filters"
-              :filter-method="col.filterMethod || (col.filters ? defaultFilterMethod(col.prop) : undefined)"
+              :tooltip-options="defaultTooltipOptions"
+              :filters="getColumnFilters(col)"
+              :filter-method="col.filterMethod || (getColumnFilters(col) ? defaultFilterMethod(col.prop) : undefined)"
             >
               <template #default="scope">
                 <slot :name="col.slotName || col.prop" v-bind="scope">
-                  {{ scope.row[col.prop] ?? '-' }}
+                  <!-- 行内编辑态 -->
+                  <div
+                    v-if="col.editable && isCellEditing(scope.row, col.prop)"
+                    class="inline-edit-wrapper"
+                    @click.stop
+                  >
+                    <el-select
+                      v-if="col.editType === 'select'"
+                      v-model="editingCell!.tempValue"
+                      size="small"
+                      autofocus
+                      class="inline-edit-control"
+                      @change="saveCellEdit(scope.row, col)"
+                      @blur="saveCellEdit(scope.row, col)"
+                    >
+                      <el-option
+                        v-for="opt in col.editOptions || []"
+                        :key="opt.value"
+                        :label="opt.label"
+                        :value="opt.value"
+                      />
+                    </el-select>
+                    <el-input-number
+                      v-else-if="col.editType === 'number'"
+                      v-model="editingCell!.tempValue"
+                      size="small"
+                      controls-position="right"
+                      class="inline-edit-control"
+                      @keyup.enter="saveCellEdit(scope.row, col)"
+                      @blur="saveCellEdit(scope.row, col)"
+                    />
+                    <el-input
+                      v-else
+                      v-model="editingCell!.tempValue"
+                      size="small"
+                      autofocus
+                      class="inline-edit-control"
+                      @keyup.enter="saveCellEdit(scope.row, col)"
+                      @blur="saveCellEdit(scope.row, col)"
+                    />
+                  </div>
+
+                  <!-- 默认/只读展示态 (支持双击快编) -->
+                  <div
+                    v-else
+                    :class="['cell-content-box', { 'is-editable': col.editable }]"
+                    :title="col.editable ? '双击可快速编辑' : undefined"
+                    @dblclick="col.editable && startCellEdit(scope.row, col)"
+                  >
+                    <span>{{ formatCellValue(scope.row, col) }}</span>
+                    <el-icon v-if="col.editable" class="edit-hint-icon"><Edit /></el-icon>
+                  </div>
                 </slot>
               </template>
             </el-table-column>
@@ -195,11 +247,12 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue'
-import { Refresh, Operation, Top, Bottom, Upload, Download } from '@element-plus/icons-vue'
+import { Refresh, Operation, Top, Bottom, Upload, Download, Edit } from '@element-plus/icons-vue'
 import axios from 'axios'
 import { ElMessage } from 'element-plus'
-import type { TableColumn, TablePagination } from './types'
+import type { TableColumn, TablePagination, CellChangeEvent } from './types'
 import ExcelImportDialog from '@/components/common/ExcelImportDialog/index.vue'
+import { formatDate } from '@/utils/format'
 
 const props = withDefaults(
   defineProps<{
@@ -230,6 +283,7 @@ const emit = defineEmits<{
   (e: 'page-change', page: number): void
   (e: 'size-change', size: number): void
   (e: 'sort-change', payload: { column: any; prop: string; order: string | null }): void
+  (e: 'cell-change', payload: CellChangeEvent): void
 }>()
 
 const tableRef = ref<any>(null)
@@ -371,11 +425,87 @@ const handleSortChange = (payload: { column: any; prop: string; order: string | 
   emit('sort-change', payload)
 }
 
+// 默认 Tooltip 延迟 0.5 秒 (500ms) 防频繁闪烁
+const defaultTooltipOptions = {
+  enterable: true,
+  placement: 'top',
+  showAfter: 500
+}
+
+// 动态获取列筛选配置 (支持 autoFilter 自动从数据中去重提取)
+const getColumnFilters = (col: TableColumn) => {
+  if (col.filters && col.filters.length > 0) return col.filters
+  if (col.autoFilter && props.data && props.data.length > 0) {
+    const rawValues = props.data.map(item => item[col.prop]).filter(v => v !== null && v !== undefined && v !== '')
+    const uniqueValues = Array.from(new Set(rawValues))
+    return uniqueValues.map(v => ({ text: String(v), value: v }))
+  }
+  return undefined
+}
+
 // 默认列过滤方法
 const defaultFilterMethod = (prop: string) => {
   return (value: any, row: any) => {
     return row[prop] === value
   }
+}
+
+// 单元格数据智能格式化 (支持 date/datetime 自动转换)
+const formatCellValue = (row: any, col: TableColumn) => {
+  const val = row[col.prop]
+  if (val === null || val === undefined || val === '') return '-'
+
+  if (col.dataType === 'date') {
+    return formatDate(val, 'YYYY-MM-DD')
+  }
+  if (col.dataType === 'datetime') {
+    return formatDate(val, 'YYYY-MM-DD HH:mm:ss')
+  }
+
+  // 智能识别 _at / _date 字段中的 ISO 时间串
+  if (typeof val === 'string' && (col.prop.endsWith('_at') || col.prop.endsWith('_date'))) {
+    if (val.includes('T') || val.includes('-')) {
+      return formatDate(val, 'YYYY-MM-DD')
+    }
+  }
+
+  return val
+}
+
+// 行内快捷编辑状态管理
+const editingCell = ref<{ rowId: any; prop: string; tempValue: any } | null>(null)
+
+const isCellEditing = (row: any, prop: string) => {
+  if (!editingCell.value) return false
+  const rowKey = row.id ?? row.code
+  return editingCell.value.rowId === rowKey && editingCell.value.prop === prop
+}
+
+const startCellEdit = (row: any, col: TableColumn) => {
+  if (!col.editable) return
+  const rowKey = row.id ?? row.code
+  editingCell.value = {
+    rowId: rowKey,
+    prop: col.prop,
+    tempValue: row[col.prop]
+  }
+}
+
+const saveCellEdit = (row: any, col: TableColumn) => {
+  if (!editingCell.value) return
+  const oldValue = row[col.prop]
+  const newValue = editingCell.value.tempValue
+  if (newValue !== oldValue) {
+    row[col.prop] = newValue
+    emit('cell-change', {
+      row,
+      prop: col.prop,
+      value: newValue,
+      oldValue
+    })
+    ElMessage.success({ message: '修改已更新', duration: 1500 })
+  }
+  editingCell.value = null
 }
 
 // 分页变化与每页条数持久化缓存
@@ -638,5 +768,45 @@ defineExpose({
 
 .import-button-group {
   margin-right: 2px;
+}
+
+/* 单元格行内编辑与高亮微交互 */
+.cell-content-box {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 24px;
+  width: 100%;
+}
+
+.cell-content-box.is-editable {
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 4px;
+  transition: all 0.15s ease-in-out;
+}
+
+.cell-content-box.is-editable:hover {
+  background-color: #f1f5f9;
+  color: #0284c7;
+}
+
+.edit-hint-icon {
+  font-size: 12px;
+  color: #94a3b8;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.cell-content-box.is-editable:hover .edit-hint-icon {
+  opacity: 1;
+}
+
+.inline-edit-wrapper {
+  width: 100%;
+}
+
+.inline-edit-control {
+  width: 100% !important;
 }
 </style>

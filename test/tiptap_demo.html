@@ -1,0 +1,776 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tiptap 现代富文本引擎 Demo - 飞书/Notion 交互体验</title>
+  <style>
+    :root {
+      --primary: #3370ff;
+      --primary-hover: #285cf6;
+      --primary-light: #e8f0fe;
+      --bg-page: #f8fafc;
+      --bg-paper: #ffffff;
+      --text-main: #1f2329;
+      --text-regular: #4e5969;
+      --text-muted: #86909c;
+      --border: #e2e8f0;
+      --border-focus: #3b82f6;
+      --bubble-bg: #1e293b;
+      --bubble-text: #f8fafc;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+      background-color: var(--bg-page);
+      color: var(--text-main);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow-x: hidden;
+    }
+
+    /* 顶部导航与状态条 */
+    .top-header {
+      background: #ffffff;
+      border-bottom: 1px solid var(--border);
+      height: 52px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 32px;
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
+    }
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .tiptap-badge {
+      background: linear-gradient(135deg, #2563eb, #7c3aed);
+      color: #fff;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 3px 8px;
+      border-radius: 6px;
+      letter-spacing: 0.5px;
+    }
+    .header-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-main);
+    }
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+    .status-pill {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: #f1f5f9;
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-size: 11.5px;
+      color: #475569;
+    }
+    .status-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #22c55e;
+      box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.2);
+    }
+
+    /* 主画布区域 (类飞书无边界极简排版) */
+    .main-container {
+      flex: 1;
+      display: flex;
+      justify-content: center;
+      padding: 40px 20px 100px 20px;
+    }
+    .editor-wrapper {
+      width: 100%;
+      max-width: 820px;
+      background: var(--bg-paper);
+      border-radius: 12px;
+      box-shadow: 0 4px 24px -2px rgba(0, 0, 0, 0.05), 0 0 1px rgba(0, 0, 0, 0.1);
+      padding: 48px 56px;
+      position: relative;
+      transition: all 0.2s ease;
+    }
+
+    /* 交互提示 Banner */
+    .tip-banner {
+      background: #f0f7ff;
+      border: 1px solid #bfdbfe;
+      border-radius: 8px;
+      padding: 12px 16px;
+      margin-bottom: 32px;
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      font-size: 13px;
+      color: #1e40af;
+      line-height: 1.5;
+    }
+    .tip-banner strong {
+      color: #1d4ed8;
+    }
+
+    /* 文档标题 */
+    .doc-title {
+      font-size: 34px;
+      font-weight: 800;
+      color: #0f172a;
+      border: none;
+      outline: none;
+      width: 100%;
+      margin-bottom: 24px;
+      line-height: 1.25;
+      letter-spacing: -0.5px;
+    }
+    .doc-title::placeholder {
+      color: #cbd5e1;
+    }
+
+    /* Tiptap 正文编辑器核心样式 */
+    .tiptap-content {
+      outline: none;
+      font-size: 15.5px;
+      line-height: 1.8;
+      color: #334155;
+      min-height: 400px;
+    }
+    .tiptap-content p {
+      margin-bottom: 12px;
+    }
+    .tiptap-content h1 {
+      font-size: 24px;
+      font-weight: 700;
+      color: #0f172a;
+      margin: 28px 0 12px 0;
+      letter-spacing: -0.3px;
+    }
+    .tiptap-content h2 {
+      font-size: 19px;
+      font-weight: 600;
+      color: #1e293b;
+      margin: 22px 0 10px 0;
+    }
+
+    /* 飞书/Tiptap 专属 Callout 提示框 */
+    .tiptap-callout {
+      background: #eff6ff;
+      border-left: 4px solid #3b82f6;
+      border-radius: 6px;
+      padding: 14px 18px;
+      margin: 18px 0;
+      display: flex;
+      gap: 12px;
+      font-size: 14px;
+      color: #1e3a8a;
+    }
+    .callout-icon {
+      font-size: 18px;
+      user-select: none;
+    }
+
+    /* 任务待办清单 (Task List) */
+    .tiptap-task-list {
+      list-style: none;
+      margin: 16px 0;
+      padding-left: 0;
+    }
+    .tiptap-task-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 8px;
+      font-size: 14.5px;
+    }
+    .tiptap-checkbox {
+      width: 17px;
+      height: 17px;
+      border-radius: 4px;
+      accent-color: var(--primary);
+      cursor: pointer;
+    }
+    .tiptap-task-item.completed span {
+      text-decoration: line-through;
+      color: #94a3b8;
+    }
+
+    /* 质量数据表格 */
+    .tiptap-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 20px 0;
+      font-size: 13.5px;
+    }
+    .tiptap-table th, .tiptap-table td {
+      border: 1px solid #cbd5e1;
+      padding: 10px 14px;
+      text-align: left;
+    }
+    .tiptap-table th {
+      background: #f8fafc;
+      font-weight: 600;
+      color: #1e293b;
+    }
+
+    /* 代码块与高亮 */
+    .tiptap-code-block {
+      background: #0f172a;
+      color: #e2e8f0;
+      padding: 14px 18px;
+      border-radius: 8px;
+      font-family: 'JetBrains Mono', Consolas, Monaco, monospace;
+      font-size: 13px;
+      line-height: 1.6;
+      margin: 18px 0;
+      overflow-x: auto;
+    }
+    .tiptap-highlight {
+      background-color: #fef08a;
+      padding: 2px 4px;
+      border-radius: 3px;
+    }
+
+    /* =========================================================================
+       1. Tiptap 灵魂特性：浮动划词气泡工具栏 (Bubble Menu)
+       ========================================================================= */
+    .bubble-menu {
+      position: absolute;
+      display: none;
+      background: var(--bubble-bg);
+      border-radius: 8px;
+      padding: 4px 6px;
+      box-shadow: 0 10px 25px -3px rgba(0, 0, 0, 0.3), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
+      z-index: 100;
+      align-items: center;
+      gap: 2px;
+      animation: bubblePop 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    @keyframes bubblePop {
+      0% { opacity: 0; transform: translateY(6px) scale(0.95); }
+      100% { opacity: 1; transform: translateY(0) scale(1); }
+    }
+    .bubble-btn {
+      background: transparent;
+      border: none;
+      color: #cbd5e1;
+      padding: 5px 8px;
+      border-radius: 5px;
+      cursor: pointer;
+      font-size: 12.5px;
+      font-weight: 500;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.12s;
+    }
+    .bubble-btn:hover {
+      background: rgba(255, 255, 255, 0.15);
+      color: #ffffff;
+    }
+    .bubble-btn.active {
+      background: #3b82f6;
+      color: #ffffff;
+    }
+    .bubble-divider {
+      width: 1px;
+      height: 14px;
+      background: rgba(255, 255, 255, 0.2);
+      margin: 0 4px;
+    }
+
+    /* =========================================================================
+       2. Tiptap 灵魂特性：输入 '/' 呼出的斜杠命令下拉浮层 (Slash Commands)
+       ========================================================================= */
+    .slash-menu {
+      position: absolute;
+      display: none;
+      background: #ffffff;
+      border-radius: 10px;
+      box-shadow: 0 12px 30px -4px rgba(0, 0, 0, 0.15), 0 4px 8px -2px rgba(0, 0, 0, 0.05);
+      border: 1px solid var(--border);
+      width: 270px;
+      max-height: 320px;
+      overflow-y: auto;
+      z-index: 100;
+      padding: 6px;
+      animation: slashPop 0.15s ease-out;
+    }
+    @keyframes slashPop {
+      0% { opacity: 0; transform: translateY(-4px); }
+      100% { opacity: 1; transform: translateY(0); }
+    }
+    .slash-group-title {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-muted);
+      padding: 6px 10px 4px 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .slash-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 10px;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: background 0.12s;
+    }
+    .slash-item:hover, .slash-item.selected {
+      background: #f1f5f9;
+    }
+    .slash-icon {
+      width: 28px;
+      height: 28px;
+      border-radius: 6px;
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      flex-shrink: 0;
+    }
+    .slash-info {
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .slash-title {
+      font-size: 13px;
+      font-weight: 500;
+      color: #1e293b;
+    }
+    .slash-desc {
+      font-size: 11px;
+      color: #64748b;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    /* 底部代码对照折叠面板 */
+    .code-inspect-section {
+      width: 100%;
+      max-width: 820px;
+      margin: 24px auto 0 auto;
+      background: #ffffff;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      overflow: hidden;
+    }
+    .inspect-header {
+      padding: 12px 20px;
+      background: #f8fafc;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      cursor: pointer;
+      user-select: none;
+    }
+    .inspect-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: #334155;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .inspect-body {
+      padding: 16px 20px;
+      background: #0f172a;
+      color: #e2e8f0;
+      font-family: 'JetBrains Mono', Consolas, monospace;
+      font-size: 12.5px;
+      line-height: 1.6;
+      display: none;
+    }
+    .inspect-body.open {
+      display: block;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- 1. 顶部 Header -->
+  <header class="top-header">
+    <div class="header-left">
+      <span class="tiptap-badge">TIPTAP ENGINE</span>
+      <span class="header-title">飞书/Notion 交互体验在线演示</span>
+    </div>
+    <div class="header-right">
+      <span id="char-counter">字数统计: 680 字</span>
+      <div class="status-pill">
+        <span class="status-dot"></span>
+        <span id="save-status">实时响应中</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- 2. 主编辑器白纸画布 -->
+  <main class="main-container">
+    <div class="editor-wrapper">
+      
+      <!-- 体验指南 Banner -->
+      <div class="tip-banner">
+        <span>✨</span>
+        <div>
+          <strong>Tiptap 的两大标志性飞书交互特性已实装，请亲自尝试：</strong><br>
+          1. <strong>选中文本</strong>：用鼠标划选任意文字，体验 <strong>浮动气泡工具栏 (Bubble Menu)</strong> 进行加粗、高亮、设为标题。<br>
+          2. <strong>键入斜杠 <code>/</code></strong>：在空白处输入斜杠 <code>/</code>，体验 <strong>快捷块级命令菜单 (Slash Command)</strong> 快速插入表格、提示块或待办。
+        </div>
+      </div>
+
+      <!-- 文档大标题 -->
+      <input
+        class="doc-title"
+        value="减速机 CTQ 关键质量控制规程 (Tiptap 版)"
+        placeholder="无标题文档"
+      />
+
+      <!-- Tiptap 富文本可编辑区 -->
+      <div id="editor" class="tiptap-content" contenteditable="true" spellcheck="false">
+        <div class="tiptap-callout">
+          <span class="callout-icon">💡</span>
+          <div>
+            <strong>质量红线准则 (Callout Block)：</strong><br>
+            减速机作为机器人关节核心部件，反向间隙（Backlash）必须保持 <strong>≤ 1.0 arcmin</strong>，任何批次出厂检验超标直接触发 <strong>一票否决</strong>。
+          </div>
+        </div>
+
+        <h1>一、 关键检验项目指标库</h1>
+        <p>
+          本规范针对谐波减速机与 RV 减速机的来料入库检验制定。各关键参数必须使用专业测试台进行 100% 全检或加严抽样。
+        </p>
+
+        <table class="tiptap-table">
+          <thead>
+            <tr>
+              <th>检测特性 (CTQ)</th>
+              <th>公差要求</th>
+              <th>推荐检具</th>
+              <th>抽样方案</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>反向间隙 (Backlash)</strong></td>
+              <td>≤ 1.0 arcmin</td>
+              <td>高精度编码器测试台</td>
+              <td>100% 全检</td>
+            </tr>
+            <tr>
+              <td><strong>传动误差 (TE)</strong></td>
+              <td>≤ 1.5 arcmin</td>
+              <td>多齿分度台 / 光栅尺</td>
+              <td>AQL 0.4 加严</td>
+            </tr>
+            <tr>
+              <td><strong>温升测试 (8h连续运转)</strong></td>
+              <td>≤ 45 °C</td>
+              <td>红外热成像仪</td>
+              <td>每批首件抽测</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h1>二、 批次来料首件确认清单 (Task List)</h1>
+        <ul class="tiptap-task-list">
+          <li class="tiptap-task-item">
+            <input type="checkbox" class="tiptap-checkbox" checked onchange="toggleTask(this)">
+            <span>核对原厂出厂质检报告（COA）防伪码与批号一致性</span>
+          </li>
+          <li class="tiptap-task-item">
+            <input type="checkbox" class="tiptap-checkbox" checked onchange="toggleTask(this)">
+            <span>外观检查：法兰端面光洁度无划痕，防锈油脂涂覆均匀</span>
+          </li>
+          <li class="tiptap-task-item">
+            <input type="checkbox" class="tiptap-checkbox" onchange="toggleTask(this)">
+            <span>空载启动转矩测试（不得超过 0.15 N·m）</span>
+          </li>
+          <li class="tiptap-task-item">
+            <input type="checkbox" class="tiptap-checkbox" onchange="toggleTask(this)">
+            <span>全自动三坐标扫描基准安装面平面度（≤ 0.008 mm）</span>
+          </li>
+        </ul>
+
+        <h1>三、 异常遏制标准代码块 (Code Block)</h1>
+        <div class="tiptap-code-block">
+// SQM 自动报警阻断逻辑
+if (measuredBacklash > 1.0) {
+    triggerAlarm({
+        level: "CRITICAL",
+        action: "LOCK_WAREHOUSE_BATCH",
+        notify: ["SQE_LEADER", "PURCHASING_MANAGER"]
+    });
+}
+        </div>
+      </div>
+    </div>
+
+    <!-- 底部技术对照代码 -->
+    <section class="code-inspect-section">
+      <div class="inspect-header" onclick="toggleCodeInspect()">
+        <span class="inspect-title">
+          <span>⚙️</span> 查看 Tiptap 在 Vue 3 真实架构中的集成实现（仅需 20 行）
+        </span>
+        <span style="font-size: 12px; color: #64748b;">点击展开/收起 ▾</span>
+      </div>
+      <div id="inspect-content" class="inspect-body">
+// 在 Vue 3 中引入 Tiptap 极其轻量优雅：
+import { useEditor, EditorContent } from '@tiptap/vue-3'
+import StarterKit from '@tiptap/starter-kit'
+import BubbleMenu from '@tiptap/extension-bubble-menu'
+import TaskList from '@tiptap/extension-task-list'
+import TaskItem from '@tiptap/extension-task-item'
+import Table from '@tiptap/extension-table'
+
+const editor = useEditor({
+  content: '<p>飞书体验正文...</p>',
+  extensions: [
+    StarterKit,
+    BubbleMenu.configure({ element: bubbleMenuRef.value }),
+    TaskList,
+    TaskItem.configure({ nested: true }),
+    Table.configure({ resizable: true }),
+  ],
+})
+      </div>
+    </section>
+  </main>
+
+  <!-- =========================================================================
+       1. 浮动划词气泡工具栏 (Bubble Menu)
+       ========================================================================= -->
+  <div id="bubble-menu" class="bubble-menu">
+    <button class="bubble-btn" onclick="execFormat('bold')" title="加粗"><strong>B</strong></button>
+    <button class="bubble-btn" onclick="execFormat('italic')" title="斜体"><em>I</em></button>
+    <button class="bubble-btn" onclick="execFormat('strikeThrough')" title="删除线"><s>S</s></button>
+    <div class="bubble-divider"></div>
+    <button class="bubble-btn" onclick="execFormat('formatBlock', '<h1>')" title="设为 H1">H1</button>
+    <button class="bubble-btn" onclick="execFormat('formatBlock', '<h2>')" title="设为 H2">H2</button>
+    <button class="bubble-btn" onclick="execHighlight()" title="黄色高亮">🎨 高亮</button>
+    <div class="bubble-divider"></div>
+    <button class="bubble-btn" onclick="execFormat('removeFormat')" title="清除格式">✕</button>
+  </div>
+
+  <!-- =========================================================================
+       2. 斜杠命令下拉菜单 (Slash Menu)
+       ========================================================================= -->
+  <div id="slash-menu" class="slash-menu">
+    <div class="slash-group-title">基础块级格式</div>
+    <div class="slash-item" onclick="insertFromSlash('h1')">
+      <div class="slash-icon"><strong>H1</strong></div>
+      <div class="slash-info">
+        <span class="slash-title">一级标题</span>
+        <span class="slash-desc">大型章节主标题</span>
+      </div>
+    </div>
+    <div class="slash-item" onclick="insertFromSlash('h2')">
+      <div class="slash-icon"><strong>H2</strong></div>
+      <div class="slash-info">
+        <span class="slash-title">二级标题</span>
+        <span class="slash-desc">小节分类标题</span>
+      </div>
+    </div>
+    <div class="slash-item" onclick="insertFromSlash('task')">
+      <div class="slash-icon">☑️</div>
+      <div class="slash-info">
+        <span class="slash-title">待办任务清单</span>
+        <span class="slash-desc">可勾选的质量检查点</span>
+      </div>
+    </div>
+
+    <div class="slash-group-title">高级模块</div>
+    <div class="slash-item" onclick="insertFromSlash('callout')">
+      <div class="slash-icon">💡</div>
+      <div class="slash-info">
+        <span class="slash-title">提示高亮块 (Callout)</span>
+        <span class="slash-desc">强调质量红线或预警</span>
+      </div>
+    </div>
+    <div class="slash-item" onclick="insertFromSlash('table')">
+      <div class="slash-icon">📊</div>
+      <div class="slash-info">
+        <span class="slash-title">数据表格</span>
+        <span class="slash-desc">插入标准公差测试矩阵</span>
+      </div>
+    </div>
+    <div class="slash-item" onclick="insertFromSlash('code')">
+      <div class="slash-icon">💻</div>
+      <div class="slash-info">
+        <span class="slash-title">代码与逻辑块</span>
+        <span class="slash-desc">展示规则脚本或计算公式</span>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const editor = document.getElementById('editor');
+    const bubbleMenu = document.getElementById('bubble-menu');
+    const slashMenu = document.getElementById('slash-menu');
+    const charCounter = document.getElementById('char-counter');
+    const saveStatus = document.getElementById('save-status');
+    let saveTimeout = null;
+
+    // 1. 划选文字呼出 Bubble Menu
+    document.addEventListener('selectionchange', () => {
+      const selection = window.getSelection();
+      if (!selection.rangeCount || selection.isCollapsed) {
+        bubbleMenu.style.display = 'none';
+        return;
+      }
+
+      const range = selection.getRangeAt(0);
+      const text = selection.toString().trim();
+      
+      // 检查选区是否在编辑器内
+      if (text.length > 0 && editor.contains(range.commonAncestorContainer)) {
+        const rect = range.getBoundingClientRect();
+        bubbleMenu.style.display = 'flex';
+        bubbleMenu.style.left = `${rect.left + window.scrollX + (rect.width / 2) - (bubbleMenu.offsetWidth / 2)}px`;
+        bubbleMenu.style.top = `${rect.top + window.scrollY - bubbleMenu.offsetHeight - 8}px`;
+      } else {
+        bubbleMenu.style.display = 'none';
+      }
+    });
+
+    // 2. 监听输入，实现键入 '/' 呼出 Slash Commands
+    editor.addEventListener('keyup', (e) => {
+      updateCharCount();
+      triggerAutoSave();
+
+      const selection = window.getSelection();
+      if (!selection.rangeCount) return;
+
+      const range = selection.getRangeAt(0);
+      const textBefore = range.startContainer.textContent || '';
+      const cursorOffset = range.startOffset;
+
+      // 检查当前光标前是否是 '/'
+      if (textBefore.charAt(cursorOffset - 1) === '/') {
+        const rect = range.getBoundingClientRect();
+        slashMenu.style.display = 'block';
+        slashMenu.style.left = `${rect.left + window.scrollX}px`;
+        slashMenu.style.top = `${rect.bottom + window.scrollY + 6}px`;
+      } else if (e.key === 'Escape' || e.key === 'Backspace' || e.key === ' ') {
+        slashMenu.style.display = 'none';
+      }
+    });
+
+    // 点击空白处关闭 Slash Menu
+    document.addEventListener('click', (e) => {
+      if (!slashMenu.contains(e.target) && !e.target.closest('#editor')) {
+        slashMenu.style.display = 'none';
+      }
+    });
+
+    // 斜杠命令插入
+    function insertFromSlash(type) {
+      slashMenu.style.display = 'none';
+      // 移除刚才输入的 '/'
+      document.execCommand('delete', false, null);
+
+      if (type === 'h1') {
+        document.execCommand('insertHTML', false, '<h1>新一级标题</h1><p></p>');
+      } else if (type === 'h2') {
+        document.execCommand('insertHTML', false, '<h2>新二级标题</h2><p></p>');
+      } else if (type === 'task') {
+        const html = `
+          <ul class="tiptap-task-list">
+            <li class="tiptap-task-item">
+              <input type="checkbox" class="tiptap-checkbox" onchange="toggleTask(this)">
+              <span>待办任务项...</span>
+            </li>
+          </ul><p></p>
+        `;
+        document.execCommand('insertHTML', false, html);
+      } else if (type === 'callout') {
+        const html = `
+          <div class="tiptap-callout">
+            <span class="callout-icon">📌</span>
+            <div><strong>重点说明：</strong>在此输入需要重点提示的质量控制要求...</div>
+          </div><p></p>
+        `;
+        document.execCommand('insertHTML', false, html);
+      } else if (type === 'table') {
+        const html = `
+          <table class="tiptap-table">
+            <thead><tr><th>检验项目</th><th>技术公差</th><th>管控频次</th></tr></thead>
+            <tbody><tr><td>参数A</td><td>±0.01 mm</td><td>首件全检</td></tr></tbody>
+          </table><p></p>
+        `;
+        document.execCommand('insertHTML', false, html);
+      } else if (type === 'code') {
+        const html = `<div class="tiptap-code-block">// 写入逻辑代码或检验算法...</div><p></p>`;
+        document.execCommand('insertHTML', false, html);
+      }
+    }
+
+    // 格式化命令
+    function execFormat(cmd, value = null) {
+      document.execCommand(cmd, false, value);
+      bubbleMenu.style.display = 'none';
+    }
+
+    function execHighlight() {
+      const selection = window.getSelection();
+      if (!selection.rangeCount) return;
+      const text = selection.toString();
+      document.execCommand('insertHTML', false, `<span class="tiptap-highlight">${text}</span>`);
+      bubbleMenu.style.display = 'none';
+    }
+
+    function toggleTask(checkbox) {
+      const parent = checkbox.closest('.tiptap-task-item');
+      if (parent) {
+        if (checkbox.checked) {
+          parent.classList.add('completed');
+        } else {
+          parent.classList.remove('completed');
+        }
+      }
+    }
+
+    function updateCharCount() {
+      const text = editor.innerText.trim();
+      charCounter.textContent = `字数统计: ${text.length} 字`;
+    }
+
+    function triggerAutoSave() {
+      saveStatus.textContent = '保存中...';
+      clearTimeout(saveTimeout);
+      saveTimeout = setTimeout(() => {
+        const now = new Date();
+        const timeStr = now.getHours().toString().padStart(2, '0') + ':' + now.getMinutes().toString().padStart(2, '0') + ':' + now.getSeconds().toString().padStart(2, '0');
+        saveStatus.textContent = `已自动保存 (${timeStr})`;
+      }, 500);
+    }
+
+    function toggleCodeInspect() {
+      const inspect = document.getElementById('inspect-content');
+      inspect.classList.toggle('open');
+    }
+  </script>
+</body>
+</html>

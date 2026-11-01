@@ -1,0 +1,11 @@
+{
+  "table_name": "sqm_quality_issue",
+  "title": "sqm_quality_issue 架构设计规范",
+  "business_module": "质量异常与 8D 遏制改善表",
+  "description": "质量异常与 8D 遏制改善表 (问题闭环追溯)",
+  "author": "系统架构师",
+  "version": "1.0.0",
+  "updated_at": "2026-10-31 19:38:03",
+  "html_content": "<h2>1. 业务定位与核心场景</h2>\n<p><strong>sqm_quality_issue</strong>（质量异常与 8D 遏制改善表）是制造质量管理系统（SQM）中的重要业务实体，承载工程与供应链质量管控的数据流。</p>\n\n<h2>2. 核心架构与主键设计</h2>\n<ul>\n  <li><strong>物理表名：</strong><code>sqm_quality_issue</code></li>\n  <li><strong>业务定义：</strong>质量异常与 8D 遏制改善表 (问题闭环追溯)</li>\n  <li><strong>存储引擎：</strong>InnoDB（行级锁，支持事务，字符集 utf8mb4）</li>\n</ul>\n\n<h2>3. 关键字段与业务约束</h2>\n<ul>\n<li><code>id</code> (int, 主键)：自增物理主键</li><li><code>issue_no</code> (varchar)：质量问题唯一单号 (如 QI-20261018-001)</li><li><code>title</code> (varchar)：问题主题简述</li><li><code>part_id</code> (int)：关联零件ID (可选)</li><li><code>supplier_id</code> (int)：关联供应商ID (可选)</li><li><code>severity</code> (varchar)：严重等级: 致命/严重/一般/微小</li><li><code>status</code> (varchar)：闭环处理状态: 登记/已提改善/已验证/闭环</li><li><code>issue_desc</code> (text)：质量缺陷现象描述 (支持富文本与贴图)</li><li><code>solution</code> (text)：轻量化整改与改善措施方案 (支持富文本)</li><li><code>responsible</code> (varchar)：问题责任人 / 处理跟进人</li><li><code>occurred_date</code> (date)：异常发生/发现日期</li><li><code>closed_date</code> (date)：闭环解决归档日期</li><li><code>remark</code> (text)：备忘与追溯说明</li><li><code>created_at</code> (datetime)：创建时间</li><li><code>updated_at</code> (datetime)：更新时间</li>\n</ul>\n\n<h2>4. 上下游数据流向与关联关系</h2>\n<p>本表在业务生命周期中与上下游业务模块保持强一致性联动：</p>\n<ul>\n  <li><strong>上游来源：</strong>主数据配置、ERP/MES 接口同步或现场作业录入。</li>\n  <li><strong>下游流向：</strong>统计过程控制（SPC）、质量检验、8D 闭环整改与溯源看板。</li>\n</ul>\n\n<h2>5. 质量合规与维护规约</h2>\n<p>所有对本表的写操作需遵循 APQP/PPAP 质量审计规范，核心业务变更均保留操作人与时间戳。</p>",
+  "markdown_content": "# sqm_quality_issue 架构设计规范\n\n## 业务定位\n质量异常与 8D 遏制改善表 (问题闭环追溯)\n"
+}
