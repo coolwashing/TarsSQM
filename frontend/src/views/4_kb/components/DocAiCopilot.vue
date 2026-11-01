@@ -181,63 +181,74 @@
               </div>
             </div>
 
-            <!-- 卡片底栏：简短提示与开始生成 -->
+            <!-- 卡片底栏：一键复制需求与信标发给 IDE，或粘贴 IDE 内容 -->
             <div class="command-action-bar">
               <div class="action-left">
-                <span class="rag-hint">
-                  💡 按 Ctrl+Enter 立即生成
+                <button
+                  v-if="promptText.trim()"
+                  type="button"
+                  class="action-clear-btn"
+                  @click="handleClearPrompt"
+                  title="一键清空需求描述"
+                >
+                  <el-icon><Delete /></el-icon>
+                  <span>清空</span>
+                </button>
+                <span v-else class="rag-hint">
+                  💡 复制后在 IDE 提问，再粘贴回此处
                 </span>
               </div>
 
               <div class="action-right">
                 <button
-                  v-if="!generatedContent && !generating"
                   type="button"
-                  class="cancel-btn"
-                  @click="handleCancel"
+                  class="action-btn paste-ide-btn"
+                  @click="handlePasteIdeResult"
+                  title="从剪贴板读取 IDE 中生成的内容进入下方审查与就地编辑"
                 >
-                  取消
+                  <el-icon><Download /></el-icon>
+                  <span>粘贴 IDE 内容</span>
                 </button>
                 <button
-                  class="generate-main-btn"
-                  :class="{ loading: generating }"
-                  :disabled="!promptText.trim() || generating"
-                  @click="handleStartGenerate"
+                  type="button"
+                  class="action-btn copy-prompt-btn"
+                  @click="copyPromptForIde"
+                  title="一键复制完整需求与信标，直接在 IDE 聊天框中粘贴发送"
                 >
-                  <span v-if="generating" class="spin-icon">⏳</span>
-                  <span v-else>✨</span>
-                  <span>{{ generating ? '正在智写...' : (generatedContent ? '重新生成' : '开始智能生成') }}</span>
+                  <el-icon><CopyDocument /></el-icon>
+                  <span>一键复制需求与信标</span>
                 </button>
               </div>
             </div>
           </div>
 
-      <!-- 2. 无界通透审查预览区 (信标 3 修复：仅在生成中或生成完毕时展开，避免未生成时的巨大空白) -->
-      <div class="preview-card" v-if="generatedContent || generating">
+      <!-- 2. 无界通透审查预览区 (支持直接就地编辑修改内容与表格！) -->
+      <div class="preview-card" v-if="generatedContent">
         <div class="preview-status-strip">
           <div class="strip-left">
-            <span class="preview-dot" :class="{ live: generating }"></span>
+            <span class="preview-dot live"></span>
             <span class="strip-title">生成结果审查</span>
-            <span v-if="generating" class="live-tag">实时流式打字中...</span>
+            <span class="edit-tip-badge" title="支持在下方直接点击修改文字与公差表格">✏️ 支持直接就地修改</span>
           </div>
           <div class="strip-right">
-            <button class="strip-btn" @click="handlePasteIdeResult" title="从剪贴板粘贴外部内容到此处预览审查">
-              <el-icon><Download /></el-icon> 粘贴
+            <button class="strip-btn" @click="handlePasteIdeResult" title="从剪贴板重新粘贴外部内容到此处预览审查">
+              <el-icon><Download /></el-icon> 重新粘贴
             </button>
-            <button class="strip-btn" @click="handleRefreshDoc" title="刷新页面文档">
-              <el-icon><Refresh /></el-icon> 刷新
+            <button class="strip-btn danger" @click="handleClearPreview" title="放弃并清空审查内容">
+              <el-icon><Close /></el-icon> 放弃
             </button>
           </div>
         </div>
 
         <div class="preview-scroll-body">
-          <div v-if="generatedContent" class="preview-html" v-html="generatedContent"></div>
-          <div v-else-if="generating" class="preview-empty">
-            <div class="loading-wave">
-              <span></span><span></span><span></span>
-            </div>
-            <p>正在结合质量知识库标准进行深度推理与结构化排版...</p>
-          </div>
+          <!-- 就地可编辑的预览区：满足“如果需要，我再改完，确认是否写入” -->
+          <div
+            class="preview-html is-editable"
+            contenteditable="true"
+            @input="onPreviewInput"
+            v-html="generatedContent"
+            title="可直接在此处点击修改内容与表格，确认满意后再写入正文"
+          ></div>
         </div>
       </div>
 
@@ -245,34 +256,28 @@
       <div class="modal-footer" v-if="generatedContent">
         <div class="footer-note">
           <span class="safe-guard-hint">
-            🛡️ 作用范围已锁定，其余章节内容保持留存不变。
+            🛡️ 作用范围已锁定，写入时其余章节 100% 保持不变。
           </span>
         </div>
         <div class="footer-actions">
-          <el-button @click="handleCancel" size="small">取消</el-button>
+          <el-button @click="handleClearPreview" size="small">放弃</el-button>
           <el-button
             type="info"
             plain
             size="small"
             @click="handleCopyResult"
-            title="仅复制生成内容至剪贴板"
+            title="复制审查内容至剪贴板"
           >
-            📋 复制
+            📋 复制内容
           </el-button>
           <el-button
             type="primary"
             size="small"
             class="confirm-btn lock-confirm-btn"
             @click="confirmInsert('replace')"
+            title="确认写入并精准替换目标段落"
           >
-            🟢 确认替换写入
-          </el-button>
-          <el-button
-            type="default"
-            size="small"
-            @click="confirmInsert('insert')"
-          >
-            ➕ 追加至末尾
+            ✅ 确认写入正文
           </el-button>
         </div>
       </div>
@@ -676,6 +681,11 @@ const handleClearPrompt = () => {
   }
 }
 
+// 放弃/清空审查内容
+const handleClearPreview = () => {
+  generatedContent.value = ''
+}
+
 // 移除单个信标 (同步剔除输入框中对应的 【信标 X】 占位符)
 const handleDeleteBeacon = (id: string) => {
   const b = beaconListWithTags.value.find(item => item.id === id)
@@ -974,33 +984,41 @@ const confirmInsert = (mode: 'insert' | 'replace') => {
   )
 }
 
-// 一键复制 IDE 专用 Prompt
+// 用户在审查区就地打字/编辑修改
+const onPreviewInput = (e: Event) => {
+  const el = e.target as HTMLElement
+  if (el) {
+    generatedContent.value = el.innerHTML
+  }
+}
+
+// 一键复制 IDE 专用 Prompt (对齐标准结构，包含需求与已选信标详情画像)
 const copyPromptForIde = async () => {
-  const refText = referencedDocs.value.length > 0
-    ? `已关联质量知识库标准：\n- ${referencedDocs.value.join('\n- ')}`
-    : '请基于通用 SQM 供应商与制造质量管理规范基准'
+  const lines: string[] = ['要求是：']
+  lines.push(promptText.value.trim() || '请针对附带的定位信标进行针对性质量优化与技术标准核对。')
 
-  const scopeItem = availableScopes.value.find(s => s.value === selectedScope.value)
-  const scopeText = scopeItem && scopeItem.value !== 'ALL'
-    ? `【作用范围/章节靶向】：${scopeItem.label}\n注意：仅需重写/生成该章节或区域对应内容！\n`
-    : '【作用范围】：全篇规程整体\n'
+  if (beaconListWithTags.value.length > 0) {
+    lines.push('=====================')
+    lines.push(`### [附带定位信标详情 - 共 ${beaconListWithTags.value.length} 个] ###`)
+    beaconListWithTags.value.forEach(b => {
+      lines.push(`${b.tag}`)
+      lines.push(`所属章节：${b.sectionName || '规程正文'}`)
+      lines.push(`定位行号：#${b.numStr} · ${b.typeName}`)
+      lines.push(`包含文本：${b.fullText ? `"${b.fullText}"` : '(无直接文本)'}`)
+    })
+  } else if (activeSelectedText.value) {
+    lines.push('=====================')
+    lines.push(`【参考选区文本】\n${activeSelectedText.value}`)
+  }
 
-  const promptPayload = `【质量知识库 AI 智写指令】
-目标文档：${props.docTitle || '当前质量文档'} (ID: ${props.docId || '新文档'})
-${refText}
-${scopeText}
-【用户编写需求】
-${promptText.value.trim()}
-${props.selectedText ? `\n【选中文本参考】\n${props.selectedText}` : ''}
+  lines.push('\n【输出要求】')
+  lines.push('请作为 SQM 质量专家输出规范严谨的质量技术规程 HTML 片段（含 <h2>、<p>、<table border="1">、<ul> 等），支持直接写入编辑器。')
 
-【输出要求】
-请作为 SQM 资深质量专家，输出结构严谨、包含 Callout 提示块、标准表格与控制要素的专业富文本 HTML。
-请直接生成富文本 HTML 内容，或者执行代码调用本地接口 [PUT http://127.0.0.1:8010/api/kb/docs/${props.docId || ''}] 写入该文档！`
-
+  const promptPayload = lines.join('\n')
 
   try {
     await navigator.clipboard.writeText(promptPayload)
-    ElMessage.success('已复制 IDE 专用 Prompt！请直接粘贴到 IDE 聊天框中发送')
+    ElMessage.success('🚀 需求与信标已复制！请直接粘贴到 IDE 聊天框中发送')
   } catch {
     const ta = document.createElement('textarea')
     ta.value = promptPayload
@@ -1008,7 +1026,7 @@ ${props.selectedText ? `\n【选中文本参考】\n${props.selectedText}` : ''}
     ta.select()
     document.execCommand('copy')
     document.body.removeChild(ta)
-    ElMessage.success('已复制 IDE 专用 Prompt！请直接粘贴到 IDE 聊天框中发送')
+    ElMessage.success('🚀 需求与信标已复制！请直接粘贴到 IDE 聊天框中发送')
   }
 }
 
@@ -1565,8 +1583,28 @@ const handleCancel = () => {
 }
 
 .rag-hint {
-  font-size: 11.5px;
+  font-size: 11px;
   color: #94a3b8;
+  white-space: nowrap;
+}
+
+.action-clear-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  background: transparent;
+  border: none;
+  font-size: 11px;
+  color: #94a3b8;
+  cursor: pointer;
+  padding: 3px 6px;
+  border-radius: 4px;
+  transition: all 0.12s ease;
+}
+
+.action-clear-btn:hover {
+  color: #ef4444;
+  background: #fee2e2;
 }
 
 .tool-btn {
@@ -1612,6 +1650,74 @@ const handleCancel = () => {
 
 .tool-btn.sync-btn:hover {
   background: #dcfce7;
+}
+
+.action-btn.copy-prompt-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: #4f46e5;
+  color: #ffffff;
+  border: none;
+  border-radius: 6px;
+  font-size: 11.5px;
+  font-weight: 600;
+  padding: 6px 12px;
+  cursor: pointer;
+  box-shadow: 0 1px 3px rgba(79, 70, 229, 0.3);
+  transition: all 0.15s ease;
+}
+
+.action-btn.copy-prompt-btn:hover {
+  background: #4338ca;
+  box-shadow: 0 2px 6px rgba(79, 70, 229, 0.45);
+  transform: translateY(-1px);
+}
+
+.action-btn.paste-ide-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: #ffffff;
+  color: #475569;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  font-size: 11.5px;
+  font-weight: 500;
+  padding: 5px 10px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.action-btn.paste-ide-btn:hover {
+  background: #f8fafc;
+  border-color: #6366f1;
+  color: #4f46e5;
+}
+
+.edit-tip-badge {
+  font-size: 10.5px;
+  color: #4f46e5;
+  background: #eef2ff;
+  border: 1px solid #c7d2fe;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-weight: 500;
+  margin-left: 6px;
+}
+
+.preview-html.is-editable {
+  outline: none;
+  min-height: 120px;
+  cursor: text;
+  border-radius: 6px;
+  padding: 6px 8px;
+  transition: all 0.15s ease;
+}
+
+.preview-html.is-editable:focus {
+  background: #ffffff;
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
 }
 
 .generate-main-btn {
@@ -1731,6 +1837,15 @@ const handleCancel = () => {
 .strip-btn:hover {
   background: #e2e8f0;
   color: #0f172a;
+}
+
+.strip-btn.danger {
+  color: #ef4444;
+}
+
+.strip-btn.danger:hover {
+  background: #fee2e2;
+  color: #dc2626;
 }
 
 .preview-scroll-body {
