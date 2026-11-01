@@ -7,11 +7,12 @@ import requests
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
-from sqlalchemy import or_, desc
+from sqlalchemy import or_, desc, text, func
 
 from app.core.config import settings
 from app.core.database import get_db
 from app.models.kb import SqmKbDoc
+from app.common.kb_workspace import collect_assets, file_metadata, retrieve, unlink_assets
 from app.schemas.kb import (
     KbDocTreeNode,
     KbDocDetail,
@@ -55,6 +56,9 @@ def seed_initial_kb_docs(db: Session):
     """
     当知识库为空时，自动预置标准飞书式质量规范种子数据
     """
+    # Serialize the empty-table check and seed insert across concurrent requests.
+    # The revision row exists after migrations and is locked until commit.
+    db.execute(text("SELECT version_num FROM alembic_version FOR UPDATE")).scalar()
     if db.query(SqmKbDoc).count() > 0:
         # 兼容已有库：若全库无任何标星项，默认将首个核心规范标星，便于直接体现标星特性
         has_fav = db.query(SqmKbDoc).filter(SqmKbDoc.is_favorite == True).first()
@@ -62,7 +66,7 @@ def seed_initial_kb_docs(db: Session):
             first_doc = db.query(SqmKbDoc).filter(SqmKbDoc.is_folder == False).first()
             if first_doc:
                 first_doc.is_favorite = True
-                db.commit()
+        db.commit()
         return
 
     # 分组 1: 01_供应商准入与审核管理
@@ -147,6 +151,7 @@ def get_kb_tree(db: Session = Depends(get_db)):
     # 递归组织成树形结构
     node_map = {}
     for d in docs:
+        metadata = file_metadata(db, d)
         node_map[d.id] = KbDocTreeNode(
             id=d.id,
             parent_id=d.parent_id,
@@ -155,6 +160,9 @@ def get_kb_tree(db: Session = Depends(get_db)):
             is_folder=d.is_folder,
             is_favorite=bool(d.is_favorite),
             sort_order=d.sort_order,
+            type="folder" if d.is_folder else "file" if metadata else "shortcut" if d.biz_type == "SHORTCUT" else "doc",
+            target_id=d.biz_id if d.biz_type == "SHORTCUT" else None,
+            file_url=metadata.get("file_url"),
             children=[]
         )
 
@@ -212,6 +220,8 @@ def update_kb_doc(doc_id: int, payload: KbDocUpdate, db: Session = Depends(get_d
     if payload.author is not None:
         doc.author = payload.author
     if payload.content_html is not None:
+        if doc.biz_type == "FILE":
+            raise HTTPException(status_code=400, detail="附件原件不能作为在线文档覆写")
         doc.content_html = payload.content_html
         # 同步清洗出纯文本供 RAG 和全文检索
         doc.content_text = strip_html_tags(payload.content_html)
@@ -237,56 +247,95 @@ def delete_kb_doc(doc_id: int, db: Session = Depends(get_db)):
     all_delete_ids = [doc.id]
     collect_descendants(doc.id, all_delete_ids)
 
+    assets = collect_assets(db, db.query(SqmKbDoc).filter(SqmKbDoc.id.in_(all_delete_ids)).all())
+    db.flush()
     db.query(SqmKbDoc).filter(SqmKbDoc.id.in_(all_delete_ids)).delete(synchronize_session=False)
     db.commit()
+    unlink_assets(assets)
     return {"message": "文档及子目录删除成功", "deleted_ids": all_delete_ids}
+
+
+def _move_kb_item(
+    db: Session,
+    doc: SqmKbDoc,
+    target_folder_id: Optional[int],
+    sort_order: Optional[int] = None,
+    reference_id: Optional[int] = None,
+    placement: str = "inside",
+) -> None:
+    reference = None
+    if placement in ("before", "after"):
+        if reference_id is None:
+            raise HTTPException(status_code=400, detail="请选择同级移动的参照位置")
+        reference = db.get(SqmKbDoc, reference_id)
+        if reference is None:
+            raise HTTPException(status_code=404, detail="参照位置不存在，请刷新目录")
+        if reference.id == doc.id:
+            raise HTTPException(status_code=400, detail="不能以自身作为移动参照")
+        target_folder_id = reference.parent_id
+
+    if target_folder_id is not None:
+        target = db.get(SqmKbDoc, target_folder_id)
+        if target is None:
+            raise HTTPException(status_code=404, detail="目标文件夹不存在")
+        if not target.is_folder:
+            raise HTTPException(status_code=400, detail="目标位置必须是文件夹")
+
+        ancestor = target
+        visited = set()
+        while ancestor is not None:
+            if ancestor.id == doc.id:
+                raise HTTPException(status_code=400, detail="不能移入自身或子文件夹")
+            if ancestor.id in visited:
+                raise HTTPException(status_code=400, detail="目标目录结构存在循环")
+            visited.add(ancestor.id)
+            ancestor = db.get(SqmKbDoc, ancestor.parent_id) if ancestor.parent_id is not None else None
+
+    if reference is not None:
+        siblings = db.query(SqmKbDoc).filter(
+            SqmKbDoc.parent_id == target_folder_id,
+            SqmKbDoc.id != doc.id,
+        ).order_by(SqmKbDoc.sort_order.asc(), SqmKbDoc.id.asc()).all()
+        reference_index = next(i for i, sibling in enumerate(siblings) if sibling.id == reference.id)
+        siblings.insert(reference_index + (1 if placement == "after" else 0), doc)
+        doc.parent_id = target_folder_id
+        for index, sibling in enumerate(siblings, start=1):
+            sibling.sort_order = index
+        db.commit()
+        return
+
+    if doc.parent_id == target_folder_id and (sort_order is None or doc.sort_order == sort_order):
+        return
+    if doc.parent_id != target_folder_id and sort_order is None:
+        last_order = db.query(func.max(SqmKbDoc.sort_order)).filter(SqmKbDoc.parent_id == target_folder_id).scalar()
+        doc.sort_order = (last_order or 0) + 1
+    elif sort_order is not None:
+        doc.sort_order = sort_order
+    doc.parent_id = target_folder_id
+    db.commit()
 
 
 @router.post("/docs/{doc_id}/move", summary="调整文档节点层级与排序")
 def move_kb_doc(doc_id: int, payload: KbDocMove, db: Session = Depends(get_db)):
-    doc = db.query(SqmKbDoc).filter(SqmKbDoc.id == doc_id).first()
-    if not doc:
+    doc = db.get(SqmKbDoc, doc_id)
+    if doc is None:
         raise HTTPException(status_code=404, detail="文档记录不存在")
-
-    doc.parent_id = payload.target_parent_id
-    if payload.sort_order is not None:
-        doc.sort_order = payload.sort_order
-
-    db.commit()
+    _move_kb_item(db, doc, payload.target_parent_id, payload.sort_order)
     return {"message": "文档移动更新成功"}
 
 
 @router.get("/search", response_model=List[KbDocSearchResult], summary="知识库快速/RAG 检索")
-def search_kb_docs(q: str = Query(..., min_length=1, description="检索关键词或语义"), db: Session = Depends(get_db)):
-    keyword = q.strip()
-    results = db.query(SqmKbDoc).filter(
-        or_(
-            SqmKbDoc.title.like(f"%{keyword}%"),
-            SqmKbDoc.content_text.like(f"%{keyword}%")
-        )
-    ).limit(20).all()
-
+def search_kb_docs(q: str = Query(..., min_length=1, max_length=1000, description="检索标题、正文及附件文字"),
+                   folder_id: Optional[int] = Query(None), db: Session = Depends(get_db)):
+    results = retrieve(db, q, folder_id=folder_id, limit=60)
+    seen = set()
     out = []
-    for r in results:
-        plain = r.content_text or ""
-        snippet = plain
-        # 截取关键字周围上下文片段
-        idx = plain.lower().find(keyword.lower())
-        if idx != -1:
-            start = max(0, idx - 40)
-            end = min(len(plain), idx + len(keyword) + 60)
-            snippet = ("..." if start > 0 else "") + plain[start:end] + ("..." if end < len(plain) else "")
-        else:
-            snippet = plain[:100] + ("..." if len(plain) > 100 else "")
-
-        out.append(KbDocSearchResult(
-            id=r.id,
-            title=r.title,
-            icon=r.icon,
-            snippet=snippet or "暂无正文描述",
-            updated_at=r.updated_at
-        ))
-
+    for item in results:
+        if item["id"] not in seen:
+            seen.add(item["id"])
+            out.append(KbDocSearchResult(**{**item, "snippet": html.escape(item["snippet"])}))
+        if len(out) >= 20:
+            break
     return out
 
 
@@ -748,7 +797,8 @@ def get_explorer_favorites(db: Session = Depends(get_db)):
         if is_shortcut:
             target_doc = db.query(SqmKbDoc).filter(SqmKbDoc.id == r.biz_id).first()
 
-        item_type = "shortcut" if is_shortcut else "doc"
+        metadata = file_metadata(db, r)
+        item_type = "file" if metadata else "shortcut" if is_shortcut else "doc"
         content_html = target_doc.content_html if target_doc else r.content_html
         content_text = target_doc.content_text if target_doc else r.content_text
 
@@ -770,7 +820,8 @@ def get_explorer_favorites(db: Session = Depends(get_db)):
             target_id=r.biz_id if is_shortcut else None,
             author=target_doc.author if target_doc else r.author,
             content_html=content_html,
-            content_text=content_text
+            content_text=content_text,
+            **metadata
         ))
     return items
 
@@ -791,8 +842,8 @@ def get_explorer_items(
     else:
         query = query.filter(SqmKbDoc.parent_id == folder_id)
 
-    # 文件夹排在前，随后按 sort_order 和更新时间排序
-    records = query.order_by(desc(SqmKbDoc.is_folder), SqmKbDoc.sort_order.asc(), desc(SqmKbDoc.updated_at)).all()
+    # 与导航树保持一致，刷新后保留拖放确定的同级顺序。
+    records = query.order_by(SqmKbDoc.sort_order.asc(), SqmKbDoc.id.asc()).all()
 
     items = []
     for r in records:
@@ -801,7 +852,8 @@ def get_explorer_items(
         if is_shortcut:
             target_doc = db.query(SqmKbDoc).filter(SqmKbDoc.id == r.biz_id).first()
 
-        item_type = "folder" if r.is_folder else ("shortcut" if is_shortcut else "doc")
+        metadata = file_metadata(db, r)
+        item_type = "folder" if r.is_folder else "file" if metadata else ("shortcut" if is_shortcut else "doc")
 
         # 内容与大小计算
         content_html = target_doc.content_html if target_doc else r.content_html
@@ -831,7 +883,8 @@ def get_explorer_items(
             target_id=r.biz_id if is_shortcut else None,
             author=target_doc.author if target_doc else r.author,
             content_html=content_html,
-            content_text=content_text
+            content_text=content_text,
+            **metadata
         ))
     return items
 
@@ -971,14 +1024,13 @@ def update_explorer_icon(payload: KbItemIconUpdate, db: Session = Depends(get_db
 
 @router.put("/explorer/move", summary="移动文件或文件夹至新目录")
 def move_explorer_item(payload: KbItemMove, db: Session = Depends(get_db)):
-    doc = db.query(SqmKbDoc).filter(SqmKbDoc.id == payload.id).first()
-    if not doc:
+    doc = db.get(SqmKbDoc, payload.id)
+    if doc is None:
         raise HTTPException(status_code=404, detail="指定项目不存在")
-    if payload.target_folder_id == doc.id:
-        raise HTTPException(status_code=400, detail="目标目录不能为自身")
-
-    doc.parent_id = payload.target_folder_id
-    db.commit()
+    _move_kb_item(
+        db, doc, payload.target_folder_id,
+        reference_id=payload.reference_id, placement=payload.placement,
+    )
     return {"message": "移动成功", "id": doc.id, "parent_id": doc.parent_id}
 
 
@@ -987,9 +1039,8 @@ def delete_explorer_item(item_id: int, db: Session = Depends(get_db)):
     doc = db.query(SqmKbDoc).filter(SqmKbDoc.id == item_id).first()
     if not doc:
         raise HTTPException(status_code=404, detail="项目不存在")
-    db.delete(doc)
-    db.commit()
-    return {"message": "删除成功", "id": item_id}
+    result = delete_kb_doc(item_id, db)
+    return {**result, "id": item_id}
 
 
 @router.put("/explorer/favorite/{item_id}", summary="切换标星/收藏状态")

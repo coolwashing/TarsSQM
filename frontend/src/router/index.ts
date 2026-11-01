@@ -72,11 +72,10 @@ const router = createRouter({
 })
 
 // 免密直进：设置页面标题
-router.beforeEach((to, _from, next) => {
+router.beforeEach((to) => {
   if (to.meta && to.meta.title) {
     document.title = `${to.meta.title} - SQM 供应商与质量管理系统`
   }
-  next()
 })
 
 export default router

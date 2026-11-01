@@ -21,29 +21,10 @@
             title="点击直接重命名质量规程标题"
           />
           <span v-if="doc?.biz_type === 'SHORTCUT'" class="shortcut-tag">🔗 快捷方式</span>
-          <span v-else-if="doc?.biz_type" class="biz-tag">{{ doc.biz_type }}</span>
         </div>
       </div>
 
       <div class="header-right">
-        <!-- 质量状态切换器 -->
-        <div class="status-dropdown-wrap">
-          <el-dropdown trigger="click" @command="handleStatusChange">
-            <span class="status-badge-btn" :class="doc?.status?.toLowerCase() || 'active'">
-              <span class="dot"></span>
-              <span>{{ getStatusLabel(doc?.status) }} ▾</span>
-            </span>
-            <template #dropdown>
-              <el-dropdown-menu>
-                <el-dropdown-item command="ACTIVE">🟢 正式生效 (Active)</el-dropdown-item>
-                <el-dropdown-item command="REVIEW">🟡 质量评审中 (Review)</el-dropdown-item>
-                <el-dropdown-item command="DRAFT">⚪ 草稿编制中 (Draft)</el-dropdown-item>
-                <el-dropdown-item command="OBSOLETE" divided style="color: #ef4444;">🔴 已废止停用 (Obsolete)</el-dropdown-item>
-              </el-dropdown-menu>
-            </template>
-          </el-dropdown>
-        </div>
-
         <!-- 0.5s 防抖静默保存指示器 -->
         <div :class="['save-badge', saveStatusClass]">
           <span class="save-dot"></span>
@@ -87,6 +68,7 @@
       :doc-id="doc?.id"
       :doc-title="doc?.title"
       :doc-content="doc?.content_html"
+      :folder-id="doc?.parent_id"
       :initial-target="copilotTargetContext"
       :beacons="copilotBeacons"
       @remove-beacon="handleRemoveBeacon"
@@ -147,7 +129,12 @@ const copilotTargetContext = ref<{
 const copilotBeacons = ref<any[]>([])
 let debounceTimer: any = null
 
-const handleOpenAiCopilot = (ctx?: any) => {
+const handleOpenAiCopilot = async (ctx?: any) => {
+  clearTimeout(debounceTimer)
+  if (!await executeSave()) {
+    ElMessage.error('请先完成正文保存，再创建 AI 任务')
+    return
+  }
   copilotTargetContext.value = ctx || {}
   if (ctx?.beacons) {
     copilotBeacons.value = ctx.beacons
@@ -204,6 +191,11 @@ const loadDocData = async () => {
   loading.value = true
   try {
     const res = await axios.get(`/api/kb/docs/${docId.value}`)
+    if (res.data.biz_type === 'FILE') {
+      ElMessage.info('附件请在知识库中下载原件或发起问答')
+      router.replace('/kb/docs')
+      return
+    }
     doc.value = res.data
     saveStatusText.value = '已同步云端'
     saveStatusClass.value = 'status-synced'
@@ -264,29 +256,31 @@ const triggerDebouncedSave = () => {
   }, 500)
 }
 
-const executeSave = async () => {
-  if (!doc.value) return
+let saveSerial: Promise<boolean> = Promise.resolve(true)
+let saveVersion = 0
+const executeSave = (): Promise<boolean> => {
+  if (!doc.value) return Promise.resolve(false)
+  const version = ++saveVersion
+  const id = doc.value.id
+  const payload = { title: doc.value.title, icon: doc.value.icon, content_html: doc.value.content_html }
   saving.value = true
-  try {
-    await axios.put(`/api/kb/docs/${doc.value.id}`, {
-      title: doc.value.title,
-      icon: doc.value.icon,
-      content_html: doc.value.content_html
-    })
-    saveStatusText.value = '已同步'
-    saveStatusClass.value = 'status-synced'
-  } catch {
-    saveStatusText.value = '保存失败'
-    saveStatusClass.value = 'status-error'
-  } finally {
-    saving.value = false
-  }
+  saveSerial = saveSerial.then(async () => {
+    try {
+      await axios.put(`/api/kb/docs/${id}`, payload, { timeout: 15000 })
+      if (version === saveVersion) { saveStatusText.value = '已同步'; saveStatusClass.value = 'status-synced' }
+      return true
+    } catch {
+      if (version === saveVersion) { saveStatusText.value = '保存失败'; saveStatusClass.value = 'status-error' }
+      return false
+    } finally { if (version === saveVersion) saving.value = false }
+  })
+  return saveSerial
 }
 
-const handleManualSave = () => {
+const handleManualSave = async () => {
   clearTimeout(debounceTimer)
-  executeSave()
-  ElMessage.success('已即时同步至云端知识库')
+  if (await executeSave()) ElMessage.success('文档已保存')
+  else ElMessage.error('保存失败，请检查后端连接')
 }
 
 // AI 内容插入 (原生坐标精准原子替换，彻底消灭错位与乱放)

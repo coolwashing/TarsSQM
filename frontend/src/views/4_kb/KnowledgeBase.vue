@@ -27,6 +27,8 @@
           </template>
         </el-dropdown>
 
+        <el-button size="small" @click="openFileUpload()" title="上传原文件到当前目录">上传文件</el-button>
+
         <!-- 1.2 选中对象时的快速操作按钮组（去除了重复文件名胶囊，仅保留高频动作） -->
         <transition name="fade">
           <div v-if="selectedItem" class="toolbar-selection-actions">
@@ -38,10 +40,10 @@
               size="small"
               class="pill-action-btn"
               @click="openEditorPage(selectedItem, true)"
-              title="在新浏览器标签页中打开编辑"
+              :title="selectedItem.type === 'file' ? '下载原始附件' : '在新浏览器标签页中打开编辑'"
             >
               <el-icon><FolderOpened /></el-icon>
-              <span>新标签页编辑 ↗</span>
+              <span>{{ selectedItem.type === 'file' ? '下载原件' : '新标签页编辑 ↗' }}</span>
             </el-button>
             <el-button
               v-else
@@ -155,7 +157,7 @@
         <!-- 现代化全局检索胶囊按钮 -->
         <div class="search-pill-box" @click="searchModalVisible = true" title="全局质量规程检索 (Ctrl+K)">
           <el-icon><Search /></el-icon>
-          <span class="search-tip-text">检索规程...</span>
+          <span class="search-tip-text">搜索文档与附件</span>
           <kbd class="shortcut-key-tag">Ctrl+K</kbd>
         </div>
 
@@ -166,7 +168,7 @@
           class="ai-smart-btn"
           @click="aiCopilotVisible = true"
         >
-          ✨ AI 智写助手
+          ✨ AI 助手
         </el-button>
 
         <!-- 刷新按钮 -->
@@ -288,7 +290,7 @@
         </div>
 
         <!-- 规程分类结构树 -->
-        <div class="nav-section-header" style="margin-top: 14px;">规程目录</div>
+        <div class="nav-section-header" style="margin-top: 14px;" title="拖到节点中间可移入文件夹，上下边缘可移为同级；右键可选择移动位置">规程目录</div>
         <div class="tree-container">
           <el-tree
             ref="navTreeRef"
@@ -297,11 +299,15 @@
             default-expand-all
             highlight-current
             :expand-on-click-node="false"
+            :draggable="!movingTreeNode"
+            :allow-drop="allowNavTreeDrop"
             class="win-nav-tree"
             @node-click="handleNavTreeNodeClick"
+            @node-drop="handleNavTreeNodeDrop"
+            @node-contextmenu="handleNavTreeContextMenu"
           >
             <template #default="{ data }">
-              <div class="tree-item-row" :class="{ 'is-selected': currentFolderId === data.id }">
+              <div class="tree-item-row" :class="{ 'is-selected': currentFolderId === data.id }" :title="data.title">
                 <span class="tree-item-icon">{{ data.icon || (data.is_folder ? '📁' : '📄') }}</span>
                 <span class="tree-item-title">{{ data.title }}</span>
               </div>
@@ -311,7 +317,9 @@
       </aside>
 
       <!-- 3.2 中间文件资源浏览区 (Explorer Viewport) -->
-      <section class="explorer-viewport" @contextmenu.prevent.stop="handleViewportContextMenu">
+      <section class="explorer-viewport" :class="{ 'is-file-drop': fileDragActive }" @contextmenu.prevent.stop="handleViewportContextMenu"
+        @dragover="handleFileDragOver" @dragleave="handleFileDragLeave" @drop="handleFileDrop">
+        <div v-if="fileDragActive" class="file-drop-hint">松开后上传到当前目录</div>
         <!-- 网格卡片模式 (Grid Mode) -->
         <div
           v-if="viewMode === 'grid'"
@@ -340,9 +348,6 @@
               >
                 {{ item.is_favorite ? '⭐' : '☆' }}
               </button>
-              <span class="status-pill-mini" :class="item.status?.toLowerCase() || 'active'">
-                {{ getStatusShortLabel(item.status) }}
-              </span>
             </div>
 
             <div class="file-card-icon-wrap">
@@ -393,7 +398,6 @@
                 <th style="width: 38px; text-align: center;">⭐</th>
                 <th style="width: 40%;">名称</th>
                 <th style="width: 14%;">修改日期</th>
-                <th style="width: 12%;">状态</th>
                 <th style="width: 12%;">类型</th>
                 <th style="width: 12%;">所属工程/来源</th>
                 <th style="width: 10%;">{{ getMetricColumnHeader() }}</th>
@@ -430,23 +434,16 @@
                   </div>
                 </td>
                 <td class="col-date">{{ item.date || '-' }}</td>
-                <!-- 状态列 -->
-                <td class="col-status">
-                  <span v-if="item.type !== 'folder'" class="status-pill-table" :class="item.status?.toLowerCase() || 'active'">
-                    {{ getStatusShortLabel(item.status) }}
-                  </span>
-                  <span v-else class="status-pill-table folder">-</span>
-                </td>
                 <td class="col-type">
                   <span class="type-pill" :class="item.type">
-                    {{ item.type === 'folder' ? '文件夹' : (item.is_shortcut ? '快捷方式' : '规程文档') }}
+                    {{ item.type === 'folder' ? '文件夹' : item.type === 'file' ? '附件原件' : (item.is_shortcut ? '快捷方式' : '在线文档') }}
                   </span>
                 </td>
                 <td class="col-proj" :title="item.proj">{{ item.proj || '-' }}</td>
                 <td class="col-size">{{ formatMetric(item) }}</td>
               </tr>
               <tr v-if="displayItems.length === 0">
-                <td colspan="7" style="text-align: center; padding: 40px; color: #9ca3af;">
+                <td colspan="6" style="text-align: center; padding: 40px; color: #9ca3af;">
                   {{ isViewingFavorites ? '暂无标星收藏文档' : '此文件夹暂无项目文件' }}
                 </td>
               </tr>
@@ -474,7 +471,7 @@
         <template v-if="selectedItem">
           <div class="preview-header">
             <span class="preview-header-title">
-              {{ selectedItem.type === 'folder' ? '📁 文件夹属性' : '📄 文档极速快照' }}
+              {{ selectedItem.type === 'folder' ? '📁 文件夹属性' : selectedItem.type === 'file' ? '📎 附件属性' : '📄 文档摘要' }}
             </span>
             <button class="preview-close-btn" @click="showPreviewPane = false" title="关闭预览窗格">×</button>
           </div>
@@ -501,9 +498,6 @@
                 >
                   {{ selectedItem.is_favorite ? '⭐ 已标星' : '☆ 标星' }}
                 </button>
-                <span class="preview-status-pill" :class="selectedItem.status?.toLowerCase() || 'active'">
-                  {{ getStatusShortLabel(selectedItem.status) }}
-                </span>
               </div>
             </div>
 
@@ -520,7 +514,7 @@
             <div class="preview-meta-grid">
               <div class="meta-grid-item">
                 <span class="meta-k">类型</span>
-                <span class="meta-v">{{ selectedItem.type === 'folder' ? '工程目录' : (selectedItem.is_shortcut ? '标准引用' : '规程文档') }}</span>
+                <span class="meta-v">{{ selectedItem.type === 'folder' ? '工程目录' : selectedItem.type === 'file' ? '附件原件' : (selectedItem.is_shortcut ? '标准引用' : '在线文档') }}</span>
               </div>
               <div class="meta-grid-item">
                 <span class="meta-k">规模</span>
@@ -536,9 +530,14 @@
               </div>
             </div>
 
+            <div v-if="selectedItem.type === 'file'" class="attachment-index-info">
+              <p>{{ selectedItem.index_message || '原件已保存' }}</p>
+              <el-button text size="small" :loading="reindexing" @click="reindexSelectedFile">重新索引</el-button>
+            </div>
+
             <!-- 正文预览 / CTQ 公差红线快照 (紧凑自适应高度) -->
             <div class="preview-content-section" v-if="selectedItem.type !== 'folder'">
-              <div class="section-title">📝 条款与公差摘要</div>
+              <div class="section-title">{{ selectedItem.type === 'file' ? '提取正文摘要' : '文档摘要' }}</div>
               <div class="content-preview-box">
                 {{ selectedItem.content_text || '暂无纯文本摘要或正在加载中...' }}
               </div>
@@ -555,9 +554,10 @@
                   class="preview-primary-btn"
                   @click="openEditorPage(selectedItem, false)"
                 >
-                  ✏️ 编辑文档
+                  {{ selectedItem.type === 'file' ? '下载原件' : '✏️ 编辑文档' }}
                 </el-button>
                 <el-button
+                  v-if="selectedItem.type !== 'file'"
                   size="default"
                   class="preview-sub-btn"
                   @click="openEditorPage(selectedItem, true)"
@@ -571,7 +571,7 @@
                 class="preview-ai-btn"
                 @click="openAiCopilotForSelected"
               >
-                ✨ AI 智能伴写助手
+                {{ selectedItem.type === 'file' ? '✨ 用此附件提问' : '✨ AI 问答与编辑' }}
               </el-button>
             </template>
             <template v-else>
@@ -615,13 +615,19 @@
       @click.stop
     >
       <!-- 场景 A：在具体文件/文件夹上右键 -->
-      <template v-if="contextMenuItem">
+      <template v-if="contextMenuTreeNode">
+        <div class="context-item" @click.stop.prevent="handleContextMenuAction('move')">
+          <el-icon><FolderOpened /></el-icon>
+          <span>移动到…</span>
+        </div>
+      </template>
+      <template v-else-if="contextMenuItem">
         <div class="context-item primary-action" @click.stop.prevent="handleContextMenuAction('openInCurrent')">
           <el-icon><Edit /></el-icon>
-          <span>{{ contextMenuItem.type === 'folder' ? '打开文件夹' : '进入编辑 (当前页)' }}</span>
+          <span>{{ contextMenuItem.type === 'folder' ? '打开文件夹' : contextMenuItem.type === 'file' ? '下载原件' : '进入编辑' }}</span>
         </div>
         <div
-          v-if="contextMenuItem.type !== 'folder'"
+          v-if="contextMenuItem.type !== 'folder' && contextMenuItem.type !== 'file'"
           class="context-item"
           @click.stop.prevent="handleContextMenuAction('openInNewTab')"
         >
@@ -646,19 +652,14 @@
 
         <div class="context-divider" v-if="contextMenuItem.type !== 'folder'"></div>
 
-        <!-- 变更质量状态子菜单 -->
-        <div class="context-item submenu-parent" v-if="contextMenuItem.type !== 'folder'">
-          <el-icon><Document /></el-icon>
-          <span>变更质量状态 ▾</span>
-          <div class="context-submenu">
-            <div class="context-item" @click.stop.prevent="handleStatusUpdate(contextMenuItem, 'ACTIVE')">🟢 正式生效</div>
-            <div class="context-item" @click.stop.prevent="handleStatusUpdate(contextMenuItem, 'REVIEW')">🟡 质量评审中</div>
-            <div class="context-item" @click.stop.prevent="handleStatusUpdate(contextMenuItem, 'DRAFT')">⚪ 草稿编制中</div>
-            <div class="context-item delete" @click.stop.prevent="handleStatusUpdate(contextMenuItem, 'OBSOLETE')">🔴 废止停用</div>
-          </div>
-        </div>
-
         <div class="context-divider"></div>
+        <div v-if="contextMenuItem.type === 'file'" class="context-item" @click.stop.prevent="copySelectedFile">
+          <span>复制一份到当前目录</span>
+        </div>
+        <div class="context-item" @click.stop.prevent="handleContextMenuAction('move')">
+          <el-icon><FolderOpened /></el-icon>
+          <span>移动到…</span>
+        </div>
         <div class="context-item" @click.stop.prevent="handleContextMenuAction('rename')">
           <el-icon><Edit /></el-icon>
           <span>重命名 (F2)</span>
@@ -675,6 +676,7 @@
 
       <!-- 场景 B：在空白视口区域右键 (Windows 经典上下文菜单) -->
       <template v-else>
+        <div class="context-item" @click="openFileUpload()"><span>上传文件…</span></div>
         <!-- Windows 经典新建子菜单 -->
         <div class="context-item submenu-parent primary-item">
           <el-icon><DocumentAdd /></el-icon>
@@ -900,6 +902,45 @@
       </template>
     </el-dialog>
 
+    <el-dialog
+      v-model="moveModal.visible"
+      title="移动到"
+      width="460px"
+      append-to-body
+      destroy-on-close
+      :close-on-click-modal="!movingTreeNode"
+      :close-on-press-escape="!movingTreeNode"
+      :show-close="!movingTreeNode"
+    >
+      <p class="move-item-name">移动「{{ moveModal.name }}」</p>
+      <el-tree
+        v-if="moveModal.visible"
+        :data="moveTargetTree"
+        node-key="id"
+        :props="{ label: 'title' }"
+        :current-node-key="moveModal.targetFolderId"
+        default-expand-all
+        highlight-current
+        :expand-on-click-node="false"
+        class="move-target-tree"
+        @node-click="handleMoveTargetClick"
+      >
+        <template #default="{ data }">
+          <span class="move-target-title" :title="data.title">📁 {{ data.title }}</span>
+        </template>
+      </el-tree>
+      <p class="move-destination">目标位置：{{ moveModal.destination }}</p>
+      <template #footer>
+        <el-button :disabled="movingTreeNode" @click="moveModal.visible = false">取消</el-button>
+        <el-button
+          type="primary"
+          :loading="movingTreeNode"
+          :disabled="moveModal.targetFolderId === moveModal.sourceParentId"
+          @click="submitMoveModal"
+        >确认移动</el-button>
+      </template>
+    </el-dialog>
+
     <!-- ==================== 8. 重命名弹窗 ==================== -->
     <el-dialog
       v-model="renameModal.visible"
@@ -947,6 +988,7 @@
               <span class="res-date">{{ formatDate(res.updated_at) }}</span>
             </div>
             <div class="res-snippet" v-html="res.snippet"></div>
+            <div class="search-source-location">{{ res.kind === 'file' ? '附件' : '在线文档' }} · {{ res.location }}</div>
           </div>
         </template>
         <div v-else-if="hasSearched" class="no-res">未找到匹配的质量标准条款</div>
@@ -957,11 +999,14 @@
     <!-- ==================== 10. AI 智写助手弹窗 ==================== -->
     <DocAiCopilot
       v-model="aiCopilotVisible"
-      :doc-id="selectedItem?.id"
+      :doc-id="selectedItem?.type === 'folder' ? undefined : selectedItem?.is_shortcut ? selectedItem.target_id || selectedItem.id : selectedItem?.id"
       :doc-title="selectedItem?.name"
+      :editable="!!selectedItem && selectedItem.type !== 'folder' && selectedItem.type !== 'file'"
+      :folder-id="currentFolderId"
       @confirm-insert="handleConfirmAiInsert"
       @refresh-doc="refreshCurrentFolder"
     />
+    <KbFileUpload v-model="fileUploadVisible" :folder-id="currentFolderId" :folder-name="pathCrumbs[pathCrumbs.length - 1]?.name" :files="incomingFiles" @uploaded="refreshCurrentFolder" />
   </div>
 </template>
 
@@ -991,6 +1036,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import axios from 'axios'
 import { formatDate } from '@/utils/format'
 import DocAiCopilot from './components/DocAiCopilot.vue'
+import KbFileUpload from './components/KbFileUpload.vue'
 
 const router = useRouter()
 
@@ -998,7 +1044,7 @@ const router = useRouter()
 interface KbExplorerItem {
   id: number
   name: string
-  type: 'folder' | 'doc' | 'shortcut'
+  type: 'folder' | 'doc' | 'shortcut' | 'file'
   icon?: string
   date?: string
   proj?: string
@@ -1010,11 +1056,28 @@ interface KbExplorerItem {
   author?: string
   content_html?: string
   content_text?: string
+  file_url?: string
+  file_size?: number
+  index_status?: string
+  index_message?: string
 }
 
 interface KbBreadcrumbNode {
   id: number | null | string
   name: string
+}
+
+interface KbMoveTargetNode {
+  id: number
+  title: string
+  children: KbMoveTargetNode[]
+}
+
+interface KbMoveRequest {
+  id: number
+  target_folder_id?: number | null
+  reference_id?: number
+  placement?: 'inside' | 'before' | 'after'
 }
 
 // 状态声明
@@ -1027,6 +1090,53 @@ const viewMode = ref<'grid' | 'table'>('grid')
 const showNavPane = ref(true)
 const showPreviewPane = ref(true)
 const filterKeyword = ref('')
+const fileUploadVisible = ref(false)
+const incomingFiles = ref<File[]>([])
+const fileDragActive = ref(false)
+const reindexing = ref(false)
+const copyingFile = ref(false)
+
+const openFileUpload = (files: File[] = []) => {
+  contextMenuVisible.value = false
+  if (isViewingFavorites.value) {
+    ElMessage.info('请先打开要存放附件的目录'); return
+  }
+  incomingFiles.value = files
+  fileUploadVisible.value = true
+}
+const handleFileDragOver = (event: DragEvent) => {
+  if (event.dataTransfer?.types.includes('Files')) { event.preventDefault(); fileDragActive.value = true }
+}
+const handleFileDragLeave = (event: DragEvent) => {
+  if (!(event.currentTarget as HTMLElement).contains(event.relatedTarget as Node | null)) fileDragActive.value = false
+}
+const handleFileDrop = (event: DragEvent) => {
+  fileDragActive.value = false
+  const files = Array.from(event.dataTransfer?.files || [])
+  if (files.length) { event.preventDefault(); event.stopPropagation(); openFileUpload(files) }
+}
+const copySelectedFile = async () => {
+  const item = contextMenuItem.value || selectedItem.value
+  contextMenuVisible.value = false
+  if (!item || copyingFile.value) return
+  if (isViewingFavorites.value) { ElMessage.info('请先打开要存放副本的目录'); return }
+  copyingFile.value = true
+  try {
+    await axios.post(`/api/kb/files/${item.id}/copy`, { parent_id: currentFolderId.value })
+    refreshCurrentFolder(); ElMessage.success('已复制为独立附件')
+  } catch (error: any) { ElMessage.error(error.response?.data?.detail || '复制未完成，请稍后重试') }
+  finally { copyingFile.value = false }
+}
+const reindexSelectedFile = async () => {
+  if (!selectedItem.value || reindexing.value) return
+  reindexing.value = true
+  try {
+    const response = await axios.post(`/api/kb/files/${selectedItem.value.id}/reindex`)
+    Object.assign(selectedItem.value, response.data)
+    ElMessage.info(response.data.index_message)
+  } catch (error: any) { ElMessage.error(error.response?.data?.detail || '索引未完成') }
+  finally { reindexing.value = false }
+}
 
 // 可设计化配置：卡片尺寸与指标模式
 const cardZoomSize = ref<'small' | 'medium' | 'large'>('medium')
@@ -1041,13 +1151,31 @@ const historyIndex = ref(0)
 const quickProjects = ref<any[]>([])
 const navTreeData = ref<any[]>([])
 const navTreeRef = ref<any>(null)
+const movingTreeNode = ref(false)
 
 // 右键上下文菜单
 const contextMenuVisible = ref(false)
 const contextMenuPos = ref({ x: 0, y: 0 })
 const contextMenuItem = ref<KbExplorerItem | null>(null)
+const contextMenuTreeNode = ref<{ id: number; name: string } | null>(null)
 
 // 弹窗状态
+const moveModal = ref({
+  visible: false,
+  id: null as number | null,
+  name: '',
+  sourceParentId: 0,
+  targetFolderId: 0,
+  destination: '知识库根目录'
+})
+
+const moveTargetTree = computed<KbMoveTargetNode[]>(() => {
+  const folders = (nodes: any[]): KbMoveTargetNode[] => nodes
+    .filter(node => node.is_folder && node.id !== moveModal.value.id)
+    .map(node => ({ id: node.id, title: node.title, children: folders(node.children || []) }))
+  return [{ id: 0, title: '知识库根目录', children: folders(navTreeData.value) }]
+})
+
 const createModal = ref({
   visible: false,
   type: 'doc' as 'doc' | 'folder',
@@ -1287,6 +1415,7 @@ const getMetricColumnHeader = () => {
 
 // 格式化指标显示
 const formatMetric = (item: KbExplorerItem) => {
+  if (item.type === 'file') return `${((item.file_size || 0) / 1024).toFixed(1)} KB`
   if (item.type === 'folder') return item.proj || '工程目录'
   if (item.is_shortcut) return item.proj || '软链接引用'
 
@@ -1436,12 +1565,90 @@ const fetchNavTreeData = async () => {
   }
 }
 
-const handleNavTreeNodeClick = (data: any) => {
+const handleNavTreeNodeClick = async (data: any) => {
   if (data.is_folder) {
     navigateTo(data.id)
   } else {
-    loadFolderItems(data.parent_id || null)
+    isViewingFavorites.value = false
+    await loadFolderItems(data.parent_id || null)
+    selectedItem.value = items.value.find(item => item.id === data.id) || null
   }
+}
+
+const allowNavTreeDrop = (draggingNode: any, dropNode: any, dropType: string) => {
+  if (movingTreeNode.value || draggingNode.data.id === dropNode.data.id) return false
+  if (dropType === 'inner' && (!dropNode.data.is_folder || draggingNode.data.parent_id === dropNode.data.id)) return false
+  let ancestor = dropType === 'inner' ? dropNode : dropNode.parent
+  while (ancestor) {
+    if (ancestor.data?.id === draggingNode.data.id) return false
+    ancestor = ancestor.parent
+  }
+  return true
+}
+
+const moveKbItem = async (payload: KbMoveRequest, successMessage: string): Promise<boolean> => {
+  if (movingTreeNode.value) return false
+  movingTreeNode.value = true
+  try {
+    await axios.put('/api/kb/explorer/move', payload)
+    await Promise.all([
+      fetchNavTreeData(),
+      isViewingFavorites.value ? loadFavorites() : loadFolderItems(currentFolderId.value)
+    ])
+    ElMessage.success(successMessage)
+    return true
+  } catch (err: any) {
+    await fetchNavTreeData()
+    ElMessage.error(`移动失败: ${err.response?.data?.detail || err.message || '请重试'}`)
+    return false
+  } finally {
+    movingTreeNode.value = false
+  }
+}
+
+const handleNavTreeNodeDrop = async (draggingNode: any, dropNode: any, dropType: string) => {
+  if (dropType === 'inner') {
+    await moveKbItem({ id: draggingNode.data.id, target_folder_id: dropNode.data.id }, `已移至「${dropNode.data.title}」`)
+  } else if (dropType === 'before' || dropType === 'after') {
+    await moveKbItem({ id: draggingNode.data.id, reference_id: dropNode.data.id, placement: dropType }, '已更新目录位置与顺序')
+  }
+}
+
+const openMoveModal = (id: number, name: string) => {
+  if (movingTreeNode.value) return
+  const source = navTreeRef.value?.getNode(id)?.data
+  if (!source) {
+    ElMessage.warning('目录已变更，请刷新后重试')
+    return
+  }
+  const parentId = source.parent_id ?? 0
+  moveModal.value = {
+    visible: true,
+    id,
+    name,
+    sourceParentId: parentId,
+    targetFolderId: parentId,
+    destination: parentId ? navTreeRef.value.getNode(parentId)?.data.title || '当前目录' : '知识库根目录'
+  }
+}
+
+const handleMoveTargetClick = (data: KbMoveTargetNode, node: any) => {
+  if (movingTreeNode.value) return
+  moveModal.value.targetFolderId = data.id
+  const names: string[] = []
+  for (let ancestor = node; ancestor?.data?.title; ancestor = ancestor.parent) {
+    names.unshift(ancestor.data.title)
+  }
+  moveModal.value.destination = names.join(' / ')
+}
+
+const submitMoveModal = async () => {
+  if (moveModal.value.id === null || moveModal.value.targetFolderId === moveModal.value.sourceParentId) return
+  const moved = await moveKbItem({
+    id: moveModal.value.id,
+    target_folder_id: moveModal.value.targetFolderId || null
+  }, `已移至「${moveModal.value.destination}」`)
+  if (moved) moveModal.value.visible = false
 }
 
 const fetchAllAvailableDocs = async () => {
@@ -1484,6 +1691,7 @@ const handleItemDoubleClick = (item: KbExplorerItem) => {
 
 // 打开独立编辑页面 (可指定当前页直达或新标签页)
 const openEditorPage = (item: KbExplorerItem, newTab = false) => {
+  if (item.type === 'file') { downloadOriginal(item); return }
   const docId = item.is_shortcut && item.target_id ? item.target_id : item.id
   if (!docId) {
     ElMessage.warning('无效的文档编号')
@@ -1501,6 +1709,16 @@ const openEditorPage = (item: KbExplorerItem, newTab = false) => {
     // 当前标签页平滑路由跳转 (最稳定，0 拦截)
     router.push(targetPath)
   }
+}
+
+const downloadOriginal = async (item: KbExplorerItem) => {
+  try {
+    const response = await axios.get(item.file_url || `/api/kb/files/${item.id}/download`, { responseType: 'blob' })
+    const url = URL.createObjectURL(response.data)
+    const link = document.createElement('a'); link.href = url; link.download = item.name
+    document.body.appendChild(link); link.click(); link.remove()
+    setTimeout(() => URL.revokeObjectURL(url), 1000)
+  } catch { ElMessage.error('下载失败，请检查原件是否仍然存在') }
 }
 
 // 标星切换 (双向响应式联动)
@@ -1539,13 +1757,24 @@ const handleStatusUpdate = async (item: KbExplorerItem, newStatus: string) => {
 // 4. 右键上下文菜单与空白处新建对象
 // ----------------------------------------------------
 const handleItemContextMenu = (event: MouseEvent, item: KbExplorerItem) => {
+  contextMenuTreeNode.value = null
   selectedItem.value = item
   contextMenuItem.value = item
   contextMenuPos.value = { x: event.clientX, y: event.clientY }
   contextMenuVisible.value = true
 }
 
+const handleNavTreeContextMenu = (event: MouseEvent, data: any) => {
+  event.preventDefault()
+  event.stopPropagation()
+  contextMenuItem.value = null
+  contextMenuTreeNode.value = { id: data.id, name: data.title }
+  contextMenuPos.value = { x: event.clientX, y: event.clientY }
+  contextMenuVisible.value = true
+}
+
 const handleViewportContextMenu = (event: MouseEvent) => {
+  contextMenuTreeNode.value = null
   contextMenuItem.value = null
   contextMenuPos.value = { x: event.clientX, y: event.clientY }
   contextMenuVisible.value = true
@@ -1559,6 +1788,11 @@ const handleGlobalClick = () => {
 const handleContextMenuAction = (action: string) => {
   const targetItem = contextMenuItem.value
   contextMenuVisible.value = false
+  if (action === 'move') {
+    const moveTarget = contextMenuTreeNode.value || targetItem
+    if (moveTarget) openMoveModal(moveTarget.id, moveTarget.name)
+    return
+  }
   if (!targetItem) return
 
   if (action === 'openInCurrent') {
@@ -1781,7 +2015,8 @@ const performSearch = async () => {
 
 const jumpToSearchResult = (docId: number) => {
   searchModalVisible.value = false
-  openEditorPage({ id: docId, name: '', type: 'doc', is_shortcut: false })
+  const result = searchResults.value.find((item: any) => item.id === docId)
+  openEditorPage({ id: docId, name: result?.title || '附件', type: result?.kind === 'file' ? 'file' : 'doc', is_shortcut: false })
 }
 
 // 3.3 预览窗格宽度拖拽调整 (支持本地记忆持久化 260px - 750px)
@@ -1880,6 +2115,11 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
+.explorer-viewport { position: relative; }
+.file-drop-hint { position: absolute; inset: 8px; z-index: 20; display: grid; place-items: center; pointer-events: none; border: 2px dashed #3b82f6; border-radius: 8px; background: rgba(239, 246, 255, .95); color: #1d4ed8; font-size: 15px; }
+.attachment-index-info { padding: 10px 0; color: #64748b; font-size: 12px; line-height: 1.7; }
+.attachment-index-info p { margin: 0; overflow-wrap: anywhere; }
+.search-source-location { color: #64748b; font-size: 12px; margin-top: 6px; }
 /* ==================== 全局 CSS 变量与基础框架 (100% 充满视口) ==================== */
 .win-explorer-root {
   --win-bg: #f8fafc;
@@ -2299,12 +2539,44 @@ onBeforeUnmount(() => {
 .win-nav-tree {
   background: transparent;
 }
+.move-target-tree {
+  max-height: min(48vh, 360px);
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 8px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+}
+.move-target-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.move-item-name,
+.move-destination {
+  font-size: 13px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.move-item-name {
+  margin: 0 0 12px;
+}
+.move-destination {
+  margin: 12px 0 0;
+  color: #64748b;
+}
 .tree-item-row {
   display: flex;
   align-items: center;
   gap: 6px;
   font-size: 12.5px;
   width: 100%;
+  cursor: grab;
+  user-select: none;
+}
+.tree-item-row:active {
+  cursor: grabbing;
 }
 .tree-item-row.is-selected {
   font-weight: 600;

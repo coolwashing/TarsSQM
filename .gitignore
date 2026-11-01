@@ -21,6 +21,8 @@ dist-ssr/
 # Storage uploaded files (keep directory structure via .gitkeep)
 storage/files/*
 !storage/files/.gitkeep
+storage/kb-index/
+storage/kb-ai-tasks/
 
 # IDE & OS
 .vscode/
