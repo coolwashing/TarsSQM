@@ -71,6 +71,7 @@
             ref="tiptapRef"
             v-model="doc.content_html"
             :is-wide="isWideMode"
+            :ai-active="aiCopilotVisible"
             @update:is-wide="handleWideChange"
             placeholder="在此键入标准作业规范、公差控制红线与抽样检验要求，支持点击上方插入 CTQ 公差表格..."
             @change="handleContentChange"
@@ -148,8 +149,18 @@ const copilotBeacons = ref<any[]>([])
 let debounceTimer: any = null
 
 const handleOpenAiCopilot = (ctx?: any) => {
+  // 如果是来自顶部工具栏的点击 (isToolbarToggle 为 true)
+  if (ctx?.isToolbarToggle) {
+    // 如果没有新的选中文本或新勾选的信标，且面板已经处于打开状态，则执行 Toggle 收起/关闭
+    const hasSelection = (ctx.beacons && ctx.beacons.length > 0) || (ctx.selectedText && ctx.selectedText.trim())
+    if (aiCopilotVisible.value && !hasSelection) {
+      aiCopilotVisible.value = false
+      return
+    }
+  }
+
   copilotTargetContext.value = ctx || {}
-  if (ctx?.beacons) {
+  if (ctx?.beacons && ctx.beacons.length > 0) {
     copilotBeacons.value = ctx.beacons
   }
   aiCopilotVisible.value = true

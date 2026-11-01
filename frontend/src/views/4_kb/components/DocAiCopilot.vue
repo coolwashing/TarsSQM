@@ -1,7 +1,6 @@
 <template>
-  <teleport to="body">
+  <teleport to="body" v-if="dialogVisible">
     <div
-      v-if="dialogVisible"
       ref="paletteRef"
       class="ai-palette-window"
       :class="{ 'is-collapsed': isCollapsed, 'is-dragging': isDragging }"
@@ -816,7 +815,13 @@ watch(
   () => [props.modelValue, props.initialTarget, props.beacons] as const,
   ([visible, target, beacons]) => {
     if (visible) {
+      isCollapsed.value = false
       fetchPromptPresets()
+      nextTick(() => {
+        if (promptTextareaRef.value) {
+          promptTextareaRef.value.focus()
+        }
+      })
       const sel = target?.selectedText || props.selectedText
       if (beacons && beacons.length > 0) {
         // 如果输入框为空，自动注入格式化后的信标占位符

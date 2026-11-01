@@ -7,8 +7,9 @@
         <button
           type="button"
           class="t-btn ai-sparkle-btn"
+          :class="{ active: aiActive }"
           @click.stop="handleToolbarAiClick"
-          title="呼出 AI 智写助手 (Ctrl+J)"
+          title="呼出/收起 AI 智写助手 (Ctrl+J)"
         >
           <span class="sparkle-icon">✨</span>
           <span class="ai-btn-text">AI 智写</span>
@@ -426,13 +427,15 @@ const props = withDefaults(
     placeholder?: string
     showAi?: boolean
     isWide?: boolean
+    aiActive?: boolean
   }>(),
   {
     modelValue: '',
     readonly: false,
     placeholder: '输入质量标准内容，按回车换行，支持直接粘贴质检截图或插入 CTQ 公差表格...',
     showAi: true,
-    isWide: false
+    isWide: false,
+    aiActive: false
   }
 )
 
@@ -446,6 +449,8 @@ const emit = defineEmits<{
     selectedText?: string
     headingLevel?: number
     range?: { from: number; to: number }
+    beacons?: BeaconItem[]
+    isToolbarToggle?: boolean
   }): void
   (e: 'update:isWide', val: boolean): void
   (e: 'toggle-wide', val: boolean): void
@@ -486,15 +491,48 @@ const handleBubbleAiClick = () => {
   })
 }
 
-// 智能嗅探当前光标所在上下文触发 AI 智写
+// 智能嗅探当前光标所在上下文触发 AI 智写 (支持点击工具栏呼出/切换，并自动提取已选信标)
 const handleToolbarAiClick = () => {
   let targetType = 'doc'
   let targetName = '全篇规程整体'
   let selectedText = ''
   let targetSection = 'ALL'
   let range: { from: number; to: number } | undefined = undefined
+  let beacons: BeaconItem[] | undefined = undefined
 
-  if (editor.value) {
+  // 1. 优先提取当前已选中的信标
+  const selectedBlocks = gutterBlocks.value.filter(b => selectedBlockIds.value.has(b.id))
+  if (selectedBlocks.length > 0) {
+    beacons = selectedBlocks.map(b => ({
+      id: b.id,
+      numStr: b.numStr,
+      type: b.type,
+      typeName: b.typeName,
+      icon: b.icon,
+      sectionName: b.sectionName,
+      previewText: b.previewText,
+      pos: b.pos,
+      nodeSize: b.nodeSize,
+      fullText: b.text
+    }))
+    if (beacons.length === 1) {
+      const b = beacons[0]
+      targetType = b.type === 'table' ? 'table' : (b.type === 'heading' ? 'section' : 'paragraph')
+      targetName = `行 #${b.numStr} · ${b.typeName} (${b.previewText})`
+      targetSection = b.type === 'table' ? 'TABLES' : (b.type === 'heading' ? `heading_0_${b.fullText}` : b.id)
+      selectedText = b.fullText
+      range = { from: b.pos, to: b.pos + b.nodeSize }
+    } else {
+      targetType = 'multi'
+      targetName = `多选对象 (已选 ${beacons.length} 处信标)`
+      targetSection = 'MULTI_SELECTION'
+      selectedText = beacons.map(b => `[${b.sectionName} - 行#${b.numStr}] ${b.fullText}`).join('\n')
+      const minPos = Math.min(...beacons.map(b => b.pos))
+      const maxPos = Math.max(...beacons.map(b => b.pos + b.nodeSize))
+      range = { from: minPos, to: maxPos }
+    }
+  } else if (editor.value) {
+    // 2. 嗅探光标划选或表格上下文
     const { from, to } = editor.value.state.selection
     if (from !== to) {
       selectedText = editor.value.state.doc.textBetween(from, to, ' ')
@@ -511,7 +549,7 @@ const handleToolbarAiClick = () => {
     }
   }
 
-  emit('ai-click', { targetType, targetName, selectedText, targetSection, range })
+  emit('ai-click', { targetType, targetName, selectedText, targetSection, range, beacons, isToolbarToggle: true })
 }
 
 // 大纲直接精准锁定目标章节 (信标 6 联动)
@@ -1103,7 +1141,7 @@ const handleKeydown = (e: KeyboardEvent) => {
   if ((e.ctrlKey || e.metaKey) && (e.key === 'j' || e.key === 'J')) {
     if (props.showAi && !props.readonly) {
       e.preventDefault()
-      emit('ai-click')
+      handleToolbarAiClick()
     }
   }
 }
@@ -1281,6 +1319,11 @@ defineExpose({
 .ai-sparkle-btn:hover {
   background: linear-gradient(135deg, #0369a1 0%, #1d4ed8 100%) !important;
   box-shadow: 0 2px 6px rgba(37, 99, 235, 0.35);
+}
+.ai-sparkle-btn.active {
+  background: linear-gradient(135deg, #1e40af 0%, #172554 100%) !important;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.6), inset 0 2px 4px rgba(0, 0, 0, 0.25) !important;
+  color: #93c5fd !important;
 }
 
 .table-trigger-btn {
