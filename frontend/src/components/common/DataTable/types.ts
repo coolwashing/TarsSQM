@@ -3,6 +3,13 @@ export interface TableColumnFilter {
   value: string | number | boolean
 }
 
+export interface TableOptionItem {
+  label: string
+  value: any
+  color?: 'primary' | 'success' | 'warning' | 'danger' | 'info' | string // 标签语义色彩
+  description?: string
+}
+
 export interface TableColumn {
   prop: string
   label: string
@@ -19,9 +26,16 @@ export interface TableColumn {
   visible?: boolean
   slotName?: string
   dataType?: 'text' | 'date' | 'datetime' | 'number' // 自动格式化数据类型
-  editable?: boolean // 是否支持双击单元格行内快编
-  editType?: 'input' | 'select' | 'number' // 编辑器类型
-  editOptions?: { label: string; value: any }[] // 下拉选择器配置项
+
+  // ========== 飞书多维表格行内编辑拓展 ==========
+  editable?: boolean // 是否支持单元格行内快编
+  editType?: 'input' | 'number' | 'select' | 'multi-select' | 'date' // 编辑器类型
+  dateFormat?: string // 日期时间显示格式：'YYYY-MM-DD' | 'YYYY-MM-DD HH:mm:ss' | 'YYYY-MM-DD HH:mm' | 'MM-DD' | 'relative'
+  options?: (TableOptionItem | string)[] // 静态枚举选项
+  editOptions?: (TableOptionItem | string)[] // 兼容别名
+  dictKey?: string // 关联动态字典标识（如 SUPPLIER_TIER）
+  allowCreate?: boolean // 是否允许在下拉菜单中就地创建新选项（飞书多维表格精髓）
+  colorMap?: Record<string, string> // 选项值与语义色彩映射
 }
 
 export interface TablePagination {
@@ -36,4 +50,35 @@ export interface CellChangeEvent {
   prop: string
   value: any
   oldValue: any
+}
+
+export interface BatchCellChangeItem {
+  row: any
+  prop: string
+  value: any
+  oldValue: any
+}
+
+export interface BatchCellChangeEvent {
+  prop: string
+  value: any
+  items: BatchCellChangeItem[]
+}
+
+export interface ActiveCellCoordinate {
+  rowKey: string | number
+  prop: string
+}
+
+export interface HistoryCommandItem {
+  row: any
+  prop: string
+  oldValue: any
+  newValue: any
+}
+
+export interface HistoryCommand {
+  type: 'cell-edit' | 'batch-fill'
+  label: string
+  items: HistoryCommandItem[]
 }

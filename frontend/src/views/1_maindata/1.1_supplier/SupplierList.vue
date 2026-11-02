@@ -8,6 +8,7 @@
       storage-key="supplier_list"
       import-key="supplier"
       import-title="供应商主数据"
+      unique-key="code"
       @refresh="fetchData"
       @page-change="handlePageChange"
       @size-change="handleSizeChange"
@@ -19,7 +20,8 @@
           <div class="filter-inputs">
             <el-input
               v-model="filters.keyword"
-              placeholder="搜索编码 / 全称 / 简称 / 产品类型 / 城市..."
+              placeholder="搜索编码/全称/简称..."
+              size="small"
               clearable
               :prefix-icon="Search"
               class="filter-item-input"
@@ -29,11 +31,12 @@
             <el-select
               v-model="filters.status"
               placeholder="准入状态"
+              size="small"
               clearable
               class="filter-item-select"
               @change="handleSearch"
             >
-              <el-option label="全部准入状态" value="ALL" />
+              <el-option label="全部准入" value="ALL" />
               <el-option label="合格" value="合格" />
               <el-option label="考察" value="考察" />
               <el-option label="潜在" value="潜在" />
@@ -43,26 +46,29 @@
             <el-select
               v-model="filters.supply_tier"
               placeholder="供应层级"
+              size="small"
               clearable
               class="filter-item-select"
               @change="handleSearch"
             >
-              <el-option label="全部供应层级" value="ALL" />
+              <el-option label="全部层级" value="ALL" />
               <el-option label="1供" value="1供" />
               <el-option label="2供开发中" value="2供开发中" />
               <el-option label="在开发" value="在开发" />
               <el-option label="潜在供应商" value="潜在供应商" />
             </el-select>
 
-            <el-button type="primary" :icon="Search" @click="handleSearch">查询</el-button>
-            <el-button :icon="Refresh" @click="handleReset">重置</el-button>
+            <el-button type="primary" size="small" :icon="Search" @click="handleSearch">查询</el-button>
+            <el-tooltip content="重置检索条件" placement="top" :show-after="500">
+              <el-button circle size="small" :icon="Refresh" @click="handleReset" />
+            </el-tooltip>
           </div>
         </div>
       </template>
 
-      <!-- 顶部工具栏右侧按钮 -->
+      <!-- 顶部工具栏左侧主按钮 -->
       <template #toolbar>
-        <el-button type="primary" :icon="Plus" @click="handleCreate">
+        <el-button type="primary" size="small" :icon="Plus" @click="handleCreate">
           新建供应商
         </el-button>
       </template>
@@ -87,42 +93,7 @@
         </div>
       </template>
 
-      <template #supply_tier="{ row }">
-        <el-tag
-          v-if="row.supply_tier"
-          :type="getTierTagType(row.supply_tier)"
-          effect="light"
-          class="status-tag"
-        >
-          {{ row.supply_tier }}
-        </el-tag>
-        <span v-else class="text-dim">-</span>
-      </template>
 
-      <template #status="{ row }">
-        <el-tag :type="getStatusTagType(row.status)" effect="plain" class="status-tag">
-          {{ row.status }}
-        </el-tag>
-      </template>
-
-      <template #cooperation_rate="{ row }">
-        <el-tag
-          v-if="row.cooperation_rate"
-          :type="getCoopTagType(row.cooperation_rate)"
-          effect="plain"
-          size="small"
-        >
-          {{ row.cooperation_rate }}
-        </el-tag>
-        <span v-else class="text-dim">-</span>
-      </template>
-
-      <template #product_type="{ row }">
-        <span v-if="row.product_type" class="product-type-text" :title="row.product_type">
-          {{ row.product_type }}
-        </span>
-        <span v-else class="text-dim">-</span>
-      </template>
 
       <!-- 图文档案列插槽 -->
       <template #profile_html="{ row }">
@@ -249,57 +220,75 @@ const pagination = reactive({
   total: 0
 })
 
-// 列配置定义 (支持拖拽列宽、排序、表头过滤、列显隐重排)
-const columns: TableColumn[] = [
+// 列配置定义 (纯配置驱动：支持飞书多维表格单选/多选胶囊、就地创建、键盘流导航与列拖拽)
+const columns = reactive<TableColumn[]>([
   { prop: 'code', label: '供应商简称', width: 120, fixed: 'left', sortable: true, align: 'center' },
-  { prop: 'name', label: '企业全称', minWidth: 220, sortable: true },
+  { prop: 'name', label: '企业全称', minWidth: 220, sortable: true, editable: true },
   {
     prop: 'supply_tier',
     label: '供应层级',
-    width: 125,
+    width: 120,
     align: 'center',
     sortable: true,
-    filters: [
-      { text: '1供', value: '1供' },
-      { text: '2供开发中', value: '2供开发中' },
-      { text: '在开发', value: '在开发' },
-      { text: '潜在供应商', value: '潜在供应商' }
-    ]
+    editable: true,
+    editType: 'select',
+    options: ['1供', '2供开发中', '在开发', '潜在供应商']
   },
   {
     prop: 'status',
     label: '准入状态',
-    width: 105,
+    width: 110,
     align: 'center',
     sortable: true,
-    filters: [
-      { text: '合格', value: '合格' },
-      { text: '考察', value: '考察' },
-      { text: '潜在', value: '潜在' },
-      { text: '冻结', value: '冻结' }
-    ]
+    editable: true,
+    editType: 'select',
+    options: ['合格', '考察', '潜在', '冻结']
   },
   { prop: 'profile_html', label: '图文档案', width: 115, align: 'center' },
-  { prop: 'product_type', label: '主营产品类型', minWidth: 170, sortable: true },
+  {
+    prop: 'product_type',
+    label: '主营产品类型',
+    minWidth: 180,
+    sortable: true,
+    editable: true,
+    editType: 'multi-select',
+    allowCreate: true, // 飞书精髓：允许用户就地新增产品品类
+    options: [
+      '外购件-关节模组', '减速机', '结构件-手臂类', '结构件-胸腔类', '结构件-下肢类',
+      '驱动板', '自研电机', '组装', '电池类', '线束类', '齿轮', '齿轮箱',
+      '视触觉传感器', '摄像头', '代工', 'BMS', 'SMT'
+    ]
+  },
   {
     prop: 'cooperation_rate',
     label: '配合度',
     width: 95,
     align: 'center',
     sortable: true,
+    editable: true,
+    editType: 'select',
+    options: ['高', '中', '低'],
     filters: [
       { text: '高', value: '高' },
       { text: '中', value: '中' },
       { text: '低', value: '低' }
     ]
   },
-  { prop: 'city', label: '城市', width: 95, sortable: true, editable: true },
-  { prop: 'quality_system', label: '质量体系', width: 140 },
+  { prop: 'city', label: '城市', width: 110, sortable: true, editable: true },
+  {
+    prop: 'quality_system',
+    label: '质量体系',
+    width: 180,
+    editable: true,
+    editType: 'multi-select',
+    allowCreate: true, // 允许就地增补质量认证体系
+    options: ['IATF16949', 'ISO9001', '14001 环境管理体系', '45001 职业健康安全管理体系', '50001 能源管理体系']
+  },
   { prop: 'contact', label: '联络人', width: 110, sortable: true, editable: true },
   { prop: 'phone', label: '联系电话', width: 130, editable: true },
   { prop: 'address', label: '办公/工厂地址', minWidth: 200, editable: true },
   { prop: 'created_at', label: '登记时间', width: 130, sortable: true, dataType: 'date' }
-]
+])
 
 const getStatusTagType = (status: string) => {
   switch (status) {
@@ -419,8 +408,31 @@ const handleCellChange = async ({ row, prop, value, oldValue }: CellChangeEvent)
   }
 }
 
+// 拉取后端动态字典选项集并同步至列配置
+const fetchOptions = async () => {
+  try {
+    const res = await axios.get('/api/maindata/suppliers/options')
+    const opts = res.data
+    const ptCol = columns.find(c => c.prop === 'product_type')
+    if (ptCol && opts.product_types) {
+      ptCol.options = opts.product_types
+    }
+    const qsCol = columns.find(c => c.prop === 'quality_system')
+    if (qsCol && opts.quality_systems) {
+      qsCol.options = opts.quality_systems
+    }
+    const stCol = columns.find(c => c.prop === 'supply_tier')
+    if (stCol && opts.supply_tiers) {
+      stCol.options = opts.supply_tiers
+    }
+  } catch {
+    // 静默兜底
+  }
+}
+
 onMounted(() => {
   fetchData()
+  fetchOptions()
 })
 </script>
 
@@ -441,17 +453,17 @@ onMounted(() => {
   display: flex;
   align-items: center;
   flex-wrap: nowrap;
-  gap: 10px;
+  gap: 6px;
   white-space: nowrap;
 }
 
 .filter-item-input {
-  width: 250px;
-  flex-shrink: 0;
+  width: 160px;
+  min-width: 120px;
 }
 
 .filter-item-select {
-  width: 135px;
+  width: 105px;
   flex-shrink: 0;
 }
 

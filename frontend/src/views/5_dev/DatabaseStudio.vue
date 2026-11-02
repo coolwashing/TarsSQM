@@ -232,7 +232,7 @@
             </el-tab-pane>
 
             <!-- Tab 2: 真实物理数据浏览与编辑 (接入项目标准 DataTable 组件) -->
-            <el-tab-pane label="数据记录" name="data">
+            <el-tab-pane label="数据记录" name="data" lazy>
               <div class="data-pane-content">
                 <DataTable
                   :columns="dynamicTableColumns"
@@ -289,7 +289,7 @@
             </el-tab-pane>
 
             <!-- Tab 3: 数据表架构设计与业务规约 (基于 data/table_docs/*.json 与 Tiptap 富文本) -->
-            <el-tab-pane label="架构设计" name="docs">
+            <el-tab-pane label="架构设计" name="docs" lazy>
               <div class="docs-pane-content" v-loading="loadingDoc">
                 <div class="docs-toolbar">
                   <div class="docs-toolbar-left">
@@ -348,8 +348,9 @@
     <!-- 数据库配置向导弹窗 -->
     <DbConfigDialog ref="dbConfigDialogRef" @saved="handleDbConfigSaved" />
 
-    <!-- AI 智写助手模态窗 (赋能数据表架构文档生成) -->
+    <!-- AI 智写助手模态窗 (赋能数据表架构文档生成，按需懒加载) -->
     <DocAiCopilot
+      v-if="aiCopilotVisible"
       v-model="aiCopilotVisible"
       :doc-title="currentTable ? `${getTableDisplayName(currentTable)} (${currentTable.table_name}) 表架构设计` : '数据表架构设计'"
       :doc-content="tableDocContent"
@@ -459,7 +460,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, reactive, watch } from 'vue'
+import { ref, computed, onMounted, reactive, watch, defineAsyncComponent } from 'vue'
 import {
   Coin,
   Search,
@@ -480,8 +481,9 @@ import axios from 'axios'
 import DataTable from '@/components/common/DataTable/index.vue'
 import type { TableColumn, CellChangeEvent } from '@/components/common/DataTable/types'
 import DbConfigDialog from '@/components/dev/DbConfigDialog.vue'
-import TiptapEditor from '@/components/editor/TiptapEditor.vue'
-import DocAiCopilot from '@/views/4_kb/components/DocAiCopilot.vue'
+
+const TiptapEditor = defineAsyncComponent(() => import('@/components/editor/TiptapEditor.vue'))
+const DocAiCopilot = defineAsyncComponent(() => import('@/views/4_kb/components/DocAiCopilot.vue'))
 
 // 接口类型定义
 interface DbTableItem {

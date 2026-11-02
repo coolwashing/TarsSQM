@@ -1,11 +1,5 @@
 [
   {
-    "id": "preset_ui_ux",
-    "title": "🎨 UI 视觉调优",
-    "prompt": "请优化【信标 1】的视觉样式、间距对齐与整体质感",
-    "isCustom": false
-  },
-  {
     "id": "preset_form_check",
     "title": "🛡️ 防呆与校验",
     "prompt": "请为【信标 1】增加表单防呆校验、非法字符拦截与二次警示确认机制",
@@ -40,5 +34,11 @@
     "title": "🐞 缺陷排查修复",
     "prompt": "请排查修复【信标 1】的控制台异常报警、边界条件处理与逻辑缺陷",
     "isCustom": false
+  },
+  {
+    "id": "custom_1793628846237",
+    "title": "UIUX优化",
+    "prompt": "请优化UI UX，使得简洁，清晰，不要废话，标签也有简洁，如果必须补充信息，可以使用0.5s的tooltip",
+    "isCustom": true
   }
 ]

@@ -18,8 +18,9 @@
           <div class="filter-inputs">
             <el-input
               v-model="filters.keyword"
-              placeholder="搜索特征代号 / 特性名称 / 零件图号 / 检验量具..."
+              placeholder="搜索特性代号 / 名称 / 图号 / 量具..."
               clearable
+              size="small"
               :prefix-icon="Search"
               class="filter-item-input"
               @keyup.enter="handleSearch"
@@ -29,10 +30,11 @@
               v-model="filters.featureType"
               placeholder="特性分类"
               clearable
+              size="small"
               class="filter-item-select"
               @change="handleSearch"
             >
-              <el-option label="全部特性类别" value="ALL" />
+              <el-option label="全部分类" value="ALL" />
               <el-option label="KPC (产品关键特性)" value="KPC" />
               <el-option label="KCC (过程关键特性)" value="KCC" />
             </el-select>
@@ -42,6 +44,7 @@
               placeholder="筛选零部件"
               clearable
               filterable
+              size="small"
               class="filter-item-select-part"
               @change="handleSearch"
             >
@@ -53,8 +56,10 @@
               />
             </el-select>
 
-            <el-button type="primary" :icon="Search" @click="handleSearch">查询</el-button>
-            <el-button :icon="Refresh" @click="handleReset">重置</el-button>
+            <el-button type="primary" size="small" :icon="Search" @click="handleSearch">查询</el-button>
+            <el-tooltip content="重置检索条件" placement="top" :show-after="500">
+              <el-button size="small" :icon="Refresh" circle @click="handleReset" />
+            </el-tooltip>
           </div>
         </div>
       </template>
@@ -309,29 +314,27 @@ onMounted(() => {
 
 .search-toolbar {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  gap: 16px;
-  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .filter-inputs {
   display: flex;
   align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
+  gap: 8px;
+  flex-wrap: nowrap;
 }
 
 .filter-item-input {
-  width: 260px;
-}
-
-.filter-item-select {
   width: 170px;
 }
 
+.filter-item-select {
+  width: 110px;
+}
+
 .filter-item-select-part {
-  width: 220px;
+  width: 160px;
 }
 
 .code-badge {

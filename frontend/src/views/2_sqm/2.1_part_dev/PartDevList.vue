@@ -18,8 +18,9 @@
           <div class="filter-inputs">
             <el-input
               v-model="filters.keyword"
-              placeholder="搜索零件图号 / 零件名称 / 供应商 / SQE责任人..."
+              placeholder="搜索零件图号 / 零件名称 / 供应商 / SQE..."
               clearable
+              size="small"
               :prefix-icon="Search"
               class="filter-item-input"
               @keyup.enter="handleSearch"
@@ -29,6 +30,7 @@
               v-model="filters.dev_phase"
               placeholder="开发阶段"
               clearable
+              size="small"
               class="filter-item-select"
               @change="handleSearch"
             >
@@ -43,6 +45,7 @@
               v-model="filters.status"
               placeholder="审批状态"
               clearable
+              size="small"
               class="filter-item-select"
               @change="handleSearch"
             >
@@ -53,8 +56,10 @@
               <el-option label="已冻结" value="已冻结" />
             </el-select>
 
-            <el-button type="primary" :icon="Search" @click="handleSearch">查询</el-button>
-            <el-button :icon="Refresh" @click="handleReset">重置</el-button>
+            <el-button type="primary" size="small" :icon="Search" @click="handleSearch">查询</el-button>
+            <el-tooltip content="重置检索条件" placement="top" :show-after="500">
+              <el-button size="small" :icon="Refresh" circle @click="handleReset" />
+            </el-tooltip>
           </div>
         </div>
       </template>
@@ -345,25 +350,23 @@ onMounted(() => {
 
 .search-toolbar {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  gap: 16px;
-  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .filter-inputs {
   display: flex;
   align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
+  gap: 8px;
+  flex-wrap: nowrap;
 }
 
 .filter-item-input {
-  width: 280px;
+  width: 180px;
 }
 
 .filter-item-select {
-  width: 140px;
+  width: 110px;
 }
 
 .part-badge {

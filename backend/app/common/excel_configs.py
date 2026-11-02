@@ -6,6 +6,7 @@ from typing import Dict, Any, List, Optional
 from app.models.main_data import SqmSupplier, SqmPart, SqmProject
 from app.models.sqm_quality import SqmPartDev, SqmQualityIssue
 from app.models.ctq import SqmCtq
+from app.models.task import SqmTask
 
 EXCEL_MODULE_CONFIGS: Dict[str, Dict[str, Any]] = {
     "supplier": {
@@ -448,6 +449,62 @@ EXCEL_MODULE_CONFIGS: Dict[str, Dict[str, Any]] = {
                 "required": False,
                 "comment": "备忘说明",
                 "sample": "关键装配配合面，重点监控",
+            },
+        ],
+    },
+
+    "task": {
+        "title": "协同待办任务",
+        "sheet_name": "任务导入列表",
+        "model": SqmTask,
+        "unique_key": "task_code",
+        "fields": [
+            {
+                "prop": "task_code",
+                "label": "任务编号",
+                "required": True,
+                "unique": True,
+                "comment": "唯一任务编号（如 TSK-202611-001）",
+                "sample": "TSK-202611-001",
+            },
+            {
+                "prop": "title",
+                "label": "任务标题",
+                "required": True,
+                "comment": "任务简明标题",
+                "sample": "完成供应商样品尺寸复测并录入报告",
+            },
+            {
+                "prop": "status",
+                "label": "状态",
+                "required": True,
+                "enums": ["TODO", "IN_PROGRESS", "PENDING_REVIEW", "DONE", "BLOCKED"],
+                "default": "TODO",
+                "comment": "状态：TODO(待办)、IN_PROGRESS(进行中)、PENDING_REVIEW(待审核)、DONE(已完成)、BLOCKED(阻塞)",
+                "sample": "TODO",
+            },
+            {
+                "prop": "priority",
+                "label": "优先级",
+                "required": True,
+                "enums": ["LOW", "MEDIUM", "HIGH", "URGENT"],
+                "default": "MEDIUM",
+                "comment": "优先级：LOW(低)、MEDIUM(中)、HIGH(高)、URGENT(紧急)",
+                "sample": "HIGH",
+            },
+            {
+                "prop": "assignee_name",
+                "label": "责任人",
+                "required": False,
+                "comment": "责任工程师姓名",
+                "sample": "张工",
+            },
+            {
+                "prop": "due_date",
+                "label": "截止日期",
+                "required": False,
+                "comment": "计划截止日期（YYYY-MM-DD）",
+                "sample": "2026-11-15",
             },
         ],
     },

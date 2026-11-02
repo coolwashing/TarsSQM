@@ -4,6 +4,8 @@
     <header class="workspace-header" v-if="!isFullBleedRoute">
       <div class="header-left">
         <span class="current-title">{{ currentTitle }}</span>
+        <!-- 业务页面专属操作区插槽 (如 TaskCenter 视图切换与详细立项 Teleport 目标) -->
+        <div id="workspace-header-actions" class="workspace-header-actions"></div>
       </div>
 
       <div class="header-right">
@@ -38,7 +40,9 @@
     <main class="workspace-main" :class="{ 'is-full-bleed': isFullBleedRoute }">
       <router-view v-slot="{ Component, route: currentRoute }">
         <transition name="fade" mode="out-in">
-          <component :is="Component" :key="currentRoute.fullPath" />
+          <keep-alive>
+            <component :is="Component" :key="currentRoute.path" />
+          </keep-alive>
         </transition>
       </router-view>
     </main>
@@ -97,17 +101,25 @@ onMounted(() => {
 }
 
 .workspace-header {
-  height: 64px;
+  height: 48px;
   background: #ffffff;
   border-bottom: 1px solid #e5e7eb;
-  padding: 0 24px;
+  padding: 0 16px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
 }
 
 .header-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex: 1;
+  min-width: 0;
+}
+
+.workspace-header-actions {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -119,7 +131,7 @@ onMounted(() => {
 }
 
 .current-title {
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 700;
   color: #111827;
 }
@@ -127,7 +139,7 @@ onMounted(() => {
 .header-right {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 12px;
 }
 
 .teleprompter-badge {
@@ -178,7 +190,7 @@ onMounted(() => {
 
 .workspace-main {
   flex: 1;
-  padding: 16px 20px;
+  padding: 10px 14px;
   overflow: hidden;
   display: flex;
   flex-direction: column;

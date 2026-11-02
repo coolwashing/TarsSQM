@@ -4,6 +4,7 @@
     :title="isEdit ? '编辑协同任务' : '新建质量协同任务'"
     :sub-title="isEdit ? (formData.task_code || '') : '制造质量跨部门待办'"
     width="70%"
+    :destroy-on-close="false"
     :loading="saving || loadingDetails"
     :submit-text="isEdit ? '保存更改' : '立即创建'"
     cancel-text="取消"
@@ -226,15 +227,16 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, watch } from 'vue'
+import { ref, reactive, computed, watch, defineAsyncComponent } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 import axios from 'axios'
 import DrawerContainer from '@/components/common/DrawerContainer.vue'
-import TiptapEditor from '@/components/editor/TiptapEditor.vue'
-import AttachmentPreviewModal from './AttachmentPreviewModal.vue'
 import { taskApi } from '@/api/task'
 import type { TaskItem, TaskAttachmentItem, TaskStatus, TaskPriority, TaskSourceType } from '@/types/task'
+
+const TiptapEditor = defineAsyncComponent(() => import('@/components/editor/TiptapEditor.vue'))
+const AttachmentPreviewModal = defineAsyncComponent(() => import('./AttachmentPreviewModal.vue'))
 
 const props = defineProps<{
   modelValue: boolean

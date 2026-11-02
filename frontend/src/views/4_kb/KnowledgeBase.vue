@@ -996,8 +996,9 @@
       </div>
     </el-dialog>
 
-    <!-- ==================== 10. AI 智写助手弹窗 ==================== -->
+    <!-- ==================== 10. AI 智写助手弹窗 (按需懒加载) ==================== -->
     <DocAiCopilot
+      v-if="aiCopilotVisible"
       v-model="aiCopilotVisible"
       :doc-id="selectedItem?.type === 'folder' ? undefined : selectedItem?.is_shortcut ? selectedItem.target_id || selectedItem.id : selectedItem?.id"
       :doc-title="selectedItem?.name"
@@ -1006,12 +1007,19 @@
       @confirm-insert="handleConfirmAiInsert"
       @refresh-doc="refreshCurrentFolder"
     />
-    <KbFileUpload v-model="fileUploadVisible" :folder-id="currentFolderId" :folder-name="pathCrumbs[pathCrumbs.length - 1]?.name" :files="incomingFiles" @uploaded="refreshCurrentFolder" />
+    <KbFileUpload
+      v-if="fileUploadVisible"
+      v-model="fileUploadVisible"
+      :folder-id="currentFolderId"
+      :folder-name="pathCrumbs[pathCrumbs.length - 1]?.name"
+      :files="incomingFiles"
+      @uploaded="refreshCurrentFolder"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, defineAsyncComponent } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   DocumentAdd,
@@ -1035,8 +1043,9 @@ import {
 import { ElMessage, ElMessageBox } from 'element-plus'
 import axios from 'axios'
 import { formatDate } from '@/utils/format'
-import DocAiCopilot from './components/DocAiCopilot.vue'
-import KbFileUpload from './components/KbFileUpload.vue'
+
+const DocAiCopilot = defineAsyncComponent(() => import('./components/DocAiCopilot.vue'))
+const KbFileUpload = defineAsyncComponent(() => import('./components/KbFileUpload.vue'))
 
 const router = useRouter()
 

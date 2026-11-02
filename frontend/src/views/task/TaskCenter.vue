@@ -1,34 +1,8 @@
 <template>
   <div class="task-center-page">
-    <!-- 1. 顶部全局指标指示条 (指标卡片) -->
-    <header class="task-stats-bar">
-      <div class="stat-pill total" @click="quickFilterByStatus('ALL')">
-        <span class="stat-num">{{ stats.total }}</span>
-        <span class="stat-label">总任务池</span>
-      </div>
-      <div class="stat-pill todo" @click="quickFilterByStatus('TODO')">
-        <span class="stat-num">{{ stats.todo }}</span>
-        <span class="stat-label">待办任务</span>
-      </div>
-      <div class="stat-pill in-progress" @click="quickFilterByStatus('IN_PROGRESS')">
-        <span class="stat-num">{{ stats.in_progress }}</span>
-        <span class="stat-label">进行中</span>
-      </div>
-      <div class="stat-pill pending-review" @click="quickFilterByStatus('PENDING_REVIEW')">
-        <span class="stat-num">{{ stats.pending_review }}</span>
-        <span class="stat-label">待验收</span>
-      </div>
-      <div class="stat-pill done" @click="quickFilterByStatus('DONE')">
-        <span class="stat-num">{{ stats.done }}</span>
-        <span class="stat-label">已闭环</span>
-      </div>
-      <div class="stat-pill overdue" @click="quickFilterDue('overdue')" v-if="stats.overdue > 0">
-        <span class="stat-num">{{ stats.overdue }}</span>
-        <span class="stat-label">⚠️ 已超期</span>
-      </div>
-
-      <!-- 视图模式切换与全局新建 -->
-      <div class="header-right-actions">
+    <!-- 传送至 WorkspaceHeader 的视图切换与详细立项按钮 (信标 3 -> 信标 4，消除信标 5 & 6 重复加号) -->
+    <Teleport to="#workspace-header-actions" v-if="isHeaderMounted">
+      <div class="task-header-teleport-actions">
         <el-radio-group v-model="viewMode" size="small" class="view-mode-toggle">
           <el-radio-button value="grid">📋 任务总表</el-radio-button>
           <el-radio-button value="kanban">🗂️ 状态看板</el-radio-button>
@@ -46,98 +20,21 @@
           ⚡ 预置仿真任务
         </el-button>
 
+        <!-- 信标 5 & 6：去除重复加号，只保留加号图标与清晰文字 -->
         <el-button
           size="small"
           type="primary"
           :icon="Plus"
           @click="openCreateModal"
         >
-          + 详细立项
+          详细立项
         </el-button>
       </div>
-    </header>
+    </Teleport>
 
-    <!-- 2. 多维聚合单行检索与切片工具栏 (高效紧凑) -->
-    <div class="task-filter-toolbar">
-      <div class="filter-row search-row">
-        <el-input
-          v-model="filters.keyword"
-          placeholder="搜索任务标题 / 编码 / 业务源头 / 责任人..."
-          clearable
-          :prefix-icon="Search"
-          class="search-input"
-          @keyup.enter="handleSearch"
-        />
-
-        <el-select
-          v-model="filters.source_type"
-          placeholder="业务源头"
-          clearable
-          class="filter-select source-select"
-          @change="handleSourceChange"
-        >
-          <el-option label="全部业务源头" value="ALL" />
-          <el-option label="🏢 供应商业务" value="SUPPLIER" />
-          <el-option label="⚙️ 零件试产" value="PART" />
-          <el-option label="🎯 CTQ 关键特性" value="CTQ" />
-          <el-option label="📑 规程知识库" value="DOC_KB" />
-          <el-option label="📋 自建协同" value="CUSTOM" />
-        </el-select>
-
-        <el-select
-          v-model="filters.status"
-          placeholder="任务状态"
-          clearable
-          class="filter-select"
-          @change="handleSearch"
-        >
-          <el-option label="全部状态" value="ALL" />
-          <el-option label="待办" value="TODO" />
-          <el-option label="进行中" value="IN_PROGRESS" />
-          <el-option label="待复核" value="PENDING_REVIEW" />
-          <el-option label="已闭环" value="DONE" />
-          <el-option label="已阻塞" value="BLOCKED" />
-        </el-select>
-
-        <el-select
-          v-model="filters.priority"
-          placeholder="优先级"
-          clearable
-          class="filter-select"
-          @change="handleSearch"
-        >
-          <el-option label="全部优先级" value="ALL" />
-          <el-option label="🔴 紧急红线" value="URGENT" />
-          <el-option label="🟡 重点关注" value="HIGH" />
-          <el-option label="🟢 普通" value="MEDIUM" />
-          <el-option label="⚪ 低优先级" value="LOW" />
-        </el-select>
-
-        <el-select
-          v-model="filters.due_filter"
-          placeholder="排期到期日"
-          clearable
-          class="filter-select due-select"
-          @change="handleSearch"
-        >
-          <el-option label="全部排期" value="all" />
-          <el-option label="今日到期" value="today" />
-          <el-option label="本周到期" value="this_week" />
-          <el-option label="已超期红线" value="overdue" />
-        </el-select>
-
-        <el-button type="primary" :icon="Search" @click="handleSearch">
-          查询
-        </el-button>
-        <el-button :icon="Refresh" @click="handleReset">
-          重置
-        </el-button>
-      </div>
-    </div>
-
-    <!-- 3. 主视图展示区 (Grid 视图 vs Kanban 视图) -->
+    <!-- 主视图展示区 (Grid / Kanban / Calendar / DAG) -->
     <main class="task-view-container">
-      <!-- 视图 A：总任务表 (集成飞书多维表格风格行底快速加行) -->
+      <!-- 视图 A：总任务表 (集成 AI 录入、列配置、就地加行、紧凑内边距与底部状态胶囊) -->
       <div v-show="viewMode === 'grid'" class="grid-view-wrapper">
         <DataTable
           :columns="columns"
@@ -146,10 +43,157 @@
           :pagination="pagination"
           action-width="150px"
           storage-key="sqm_task_center_v3"
+          import-key="task"
+          import-title="协同待办任务"
+          unique-key="task_code"
           @refresh="fetchData"
           @page-change="handlePageChange"
           @size-change="handleSizeChange"
+          @cell-change="handleCellChange"
         >
+          <!-- 统一紧凑检索插槽 (单行排布、不换行) -->
+          <template #search>
+            <div class="task-search-toolbar">
+              <el-input
+                v-model="filters.keyword"
+                placeholder="搜索标题 / 编码 / 责任人..."
+                clearable
+                size="small"
+                :prefix-icon="Search"
+                class="search-input"
+                @keyup.enter="handleSearch"
+              />
+
+              <el-select
+                v-model="filters.source_type"
+                placeholder="业务源头"
+                clearable
+                size="small"
+                class="filter-select source-select"
+                @change="handleSourceChange"
+              >
+                <el-option label="全部源头" value="ALL" />
+                <el-option label="🏢 供应商" value="SUPPLIER" />
+                <el-option label="⚙️ 零件" value="PART" />
+                <el-option label="🎯 CTQ" value="CTQ" />
+                <el-option label="📑 规程" value="DOC_KB" />
+                <el-option label="📋 自建" value="CUSTOM" />
+              </el-select>
+
+              <el-select
+                v-model="filters.status"
+                placeholder="状态"
+                clearable
+                size="small"
+                class="filter-select status-select"
+                @change="handleSearch"
+              >
+                <el-option label="全部状态" value="ALL" />
+                <el-option label="待办" value="TODO" />
+                <el-option label="进行中" value="IN_PROGRESS" />
+                <el-option label="待复核" value="PENDING_REVIEW" />
+                <el-option label="已闭环" value="DONE" />
+                <el-option label="已阻塞" value="BLOCKED" />
+              </el-select>
+
+              <el-select
+                v-model="filters.priority"
+                placeholder="优先级"
+                clearable
+                size="small"
+                class="filter-select priority-select"
+                @change="handleSearch"
+              >
+                <el-option label="全部优先级" value="ALL" />
+                <el-option label="🔴 紧急红线" value="URGENT" />
+                <el-option label="🟡 重点关注" value="HIGH" />
+                <el-option label="🟢 普通" value="MEDIUM" />
+                <el-option label="⚪ 低优先级" value="LOW" />
+              </el-select>
+
+              <el-select
+                v-model="filters.due_filter"
+                placeholder="排期"
+                clearable
+                size="small"
+                class="filter-select due-select"
+                @change="handleSearch"
+              >
+                <el-option label="全部排期" value="all" />
+                <el-option label="今日到期" value="today" />
+                <el-option label="本周到期" value="this_week" />
+                <el-option label="已超期红线" value="overdue" />
+              </el-select>
+
+              <el-button type="primary" size="small" :icon="Search" class="query-btn" @click="handleSearch">
+                查询
+              </el-button>
+              <el-tooltip content="重置检索条件" placement="top" :show-after="500">
+                <el-button size="small" :icon="Refresh" circle class="reset-btn" @click="handleReset" />
+              </el-tooltip>
+            </div>
+          </template>
+
+          <!-- 移入底部分页栏的指标胶囊群 (信标 7 ~ 11 -> 信标 13) -->
+          <template #footer-left>
+            <div class="task-footer-stats">
+              <div
+                class="stat-pill total"
+                :class="{ 'is-active': filters.status === 'ALL' && filters.due_filter === 'all' }"
+                @click="quickFilterByStatus('ALL')"
+                title="全部任务池"
+              >
+                <span class="stat-num">{{ stats.total }}</span>
+                <span class="stat-label">总任务池</span>
+              </div>
+              <div
+                class="stat-pill todo"
+                :class="{ 'is-active': filters.status === 'TODO' }"
+                @click="quickFilterByStatus('TODO')"
+                title="过滤待办"
+              >
+                <span class="stat-num">{{ stats.todo }}</span>
+                <span class="stat-label">待办任务</span>
+              </div>
+              <div
+                class="stat-pill in-progress"
+                :class="{ 'is-active': filters.status === 'IN_PROGRESS' }"
+                @click="quickFilterByStatus('IN_PROGRESS')"
+                title="过滤进行中"
+              >
+                <span class="stat-num">{{ stats.in_progress }}</span>
+                <span class="stat-label">进行中</span>
+              </div>
+              <div
+                class="stat-pill pending-review"
+                :class="{ 'is-active': filters.status === 'PENDING_REVIEW' }"
+                @click="quickFilterByStatus('PENDING_REVIEW')"
+                title="过滤待验收"
+              >
+                <span class="stat-num">{{ stats.pending_review }}</span>
+                <span class="stat-label">待验收</span>
+              </div>
+              <div
+                class="stat-pill done"
+                :class="{ 'is-active': filters.status === 'DONE' }"
+                @click="quickFilterByStatus('DONE')"
+                title="过滤已闭环"
+              >
+                <span class="stat-num">{{ stats.done }}</span>
+                <span class="stat-label">已闭环</span>
+              </div>
+              <div
+                v-if="stats.overdue > 0"
+                class="stat-pill overdue"
+                :class="{ 'is-active': filters.due_filter === 'overdue' }"
+                @click="quickFilterDue('overdue')"
+                title="过滤已超期红线"
+              >
+                <span class="stat-num">{{ stats.overdue }}</span>
+                <span class="stat-label">⚠️ 已超期</span>
+              </div>
+            </div>
+          </template>
           <!-- 任务标题列插槽 (可直接点击呼出侧拉抽屉) -->
           <template #title="{ row }">
             <div class="task-title-cell" @click="openEditModal(row)">
@@ -549,7 +593,7 @@
       </div>
 
       <!-- 视图 C：任务日历排期 (Calendar) -->
-      <div v-show="viewMode === 'calendar'" class="calendar-view-wrapper">
+      <div v-if="viewMode === 'calendar'" class="calendar-view-wrapper">
         <TaskCalendarView
           :tasks="allTasksList"
           @open-detail="openDetailDrawer"
@@ -559,7 +603,7 @@
       </div>
 
       <!-- 视图 D：质量拓扑依赖图 (DAG) -->
-      <div v-show="viewMode === 'dag'" class="dag-view-wrapper">
+      <div v-if="viewMode === 'dag'" class="dag-view-wrapper">
         <TaskTopologyView
           :tasks="allTasksList"
           @open-detail="openDetailDrawer"
@@ -569,6 +613,7 @@
 
     <!-- 4. 统一 70% 宽幅可拖拽协同任务抽屉 (兼顾查看与编辑，无多余冗余弹窗) -->
     <TaskEditModal
+      v-if="editModalMounted"
       v-model="editModalVisible"
       :task="editingTask"
       @saved="fetchData"
@@ -577,21 +622,23 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, nextTick } from 'vue'
+import { ref, reactive, computed, onMounted, onActivated, onDeactivated, nextTick, defineAsyncComponent } from 'vue'
 import { useRouter } from 'vue-router'
 import { Plus, Search, Refresh } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import DataTable from '@/components/common/DataTable/index.vue'
 import type { TableColumn, CellChangeEvent } from '@/components/common/DataTable/types'
 import { taskApi } from '@/api/task'
-import TaskEditModal from './components/TaskEditModal.vue'
-import TaskCalendarView from './components/TaskCalendarView.vue'
-import TaskTopologyView from './components/TaskTopologyView.vue'
 import type { TaskItem, TaskSummaryStats, TaskStatus, TaskPriority, TaskSourceType } from '@/types/task'
+
+const TaskEditModal = defineAsyncComponent(() => import('./components/TaskEditModal.vue'))
+const TaskCalendarView = defineAsyncComponent(() => import('./components/TaskCalendarView.vue'))
+const TaskTopologyView = defineAsyncComponent(() => import('./components/TaskTopologyView.vue'))
 
 const router = useRouter()
 
 const viewMode = ref<'grid' | 'kanban' | 'calendar' | 'dag'>('grid')
+const isHeaderMounted = ref(false)
 const loading = ref(false)
 const tableData = ref<TaskItem[]>([])
 const allTasksList = ref<TaskItem[]>([])
@@ -649,9 +696,10 @@ const pagination = reactive({
   total: 0
 })
 
-// 抽屉与弹窗状态
+// 抽屉与弹窗状态 (懒加载挂载，首次点击前 0 内存开销)
 const detailDrawerVisible = ref(false)
 const activeTaskId = ref<number | null>(null)
+const editModalMounted = ref(false)
 const editModalVisible = ref(false)
 const editingTask = ref<Partial<TaskItem> | null>(null)
 
@@ -734,9 +782,47 @@ const fetchData = async () => {
   }
 }
 
+const checkHeaderTarget = () => {
+  if (typeof document !== 'undefined' && document.getElementById('workspace-header-actions')) {
+    isHeaderMounted.value = true
+  }
+}
+
 onMounted(() => {
   fetchData()
+  checkHeaderTarget()
+  nextTick(checkHeaderTarget)
+  setTimeout(checkHeaderTarget, 100)
+  setTimeout(checkHeaderTarget, 300)
 })
+
+onActivated(() => {
+  checkHeaderTarget()
+  nextTick(checkHeaderTarget)
+  setTimeout(checkHeaderTarget, 100)
+})
+
+onDeactivated(() => {
+  isHeaderMounted.value = false
+})
+
+// 就地单元格编辑保存 (双击/回车修改后静默持久化，符合 data-table.md)
+const handleCellChange = async (event: CellChangeEvent) => {
+  const { row, prop, value, oldValue } = event
+  try {
+    if (prop === 'status') {
+      await taskApi.updateStatus(row.id, value)
+    } else {
+      await taskApi.updateTask(row.id, { [prop]: value })
+    }
+    row[prop] = value
+    const statsRes = await taskApi.getStats()
+    Object.assign(stats, statsRes)
+  } catch (err: any) {
+    row[prop] = oldValue
+    ElMessage.error(`任务属性修改失败: ${err.message || '请检查输入'}`)
+  }
+}
 
 const handleSearch = () => {
   pagination.page = 1
@@ -767,12 +853,15 @@ const setSourceType = (type: string) => {
 
 const quickFilterByStatus = (statusStr: string) => {
   filters.status = statusStr
-  handleSearch()
+  filters.due_filter = 'all'
+  pagination.page = 1
+  fetchData()
 }
 
 const quickFilterDue = (dueStr: string) => {
   filters.due_filter = dueStr
-  handleSearch()
+  pagination.page = 1
+  fetchData()
 }
 
 const handlePageChange = (p: number) => {
@@ -888,17 +977,7 @@ const handleCalendarCreateOnDate = (dateStr: string) => {
   editModalVisible.value = true
 }
 
-// 行内单元格快捷保存
-const handleCellChange = async ({ row, prop, value, oldValue }: CellChangeEvent) => {
-  try {
-    await taskApi.updateTask(row.id, { [prop]: value })
-    ElMessage.success('已自动保存行内修改')
-    fetchData()
-  } catch (err: any) {
-    row[prop] = oldValue
-    ElMessage.error(`行内修改失败: ${err.message || '网络异常'}`)
-  }
-}
+
 
 // 删除任务
 const handleDeleteTask = async (id: number) => {
@@ -925,11 +1004,13 @@ const openDetailDrawer = (id: number) => {
 
 const openCreateModal = () => {
   editingTask.value = null
+  editModalMounted.value = true
   editModalVisible.value = true
 }
 
 const openEditModal = (row: TaskItem) => {
   editingTask.value = row
+  editModalMounted.value = true
   editModalVisible.value = true
 }
 
@@ -1008,124 +1089,131 @@ const getPriorityTagType = (p: string) => {
   display: flex;
   flex-direction: column;
   height: 100%;
-  background: #f1f5f9;
+  width: 100%;
+  background: transparent;
   overflow: hidden;
-  padding: 12px 16px;
-  gap: 10px;
+  padding: 0;
+  gap: 0;
 }
 
-/* 顶部统计胶囊指标栏 */
-.task-stats-bar {
+.task-header-teleport-actions {
   display: flex;
   align-items: center;
   gap: 10px;
-  background: #ffffff;
-  border-radius: 8px;
-  padding: 8px 14px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
 }
 
-.stat-pill {
+/* 顶部检索栏 (嵌入 DataTable #search 插槽内，单行紧凑排布) */
+.task-search-toolbar {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 4px 10px;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: all 0.15s ease;
-  user-select: none;
-}
-.stat-pill:hover {
-  transform: translateY(-1px);
-}
-.stat-pill .stat-num {
-  font-size: 14px;
-  font-weight: 700;
-}
-.stat-pill .stat-label {
-  font-size: 11.5px;
-  color: #475569;
+  flex-wrap: nowrap;
+  white-space: nowrap;
 }
 
-.stat-pill.total {
-  background: #f8fafc;
-  color: #0f172a;
+.task-search-toolbar .search-input {
+  width: 165px;
 }
-.stat-pill.todo {
+
+.task-search-toolbar .filter-select {
+  width: 90px;
+}
+
+.task-search-toolbar .filter-select.source-select {
+  width: 105px;
+}
+
+.task-search-toolbar .filter-select.priority-select {
+  width: 95px;
+}
+
+.task-search-toolbar .filter-select.due-select {
+  width: 95px;
+}
+
+.task-search-toolbar .query-btn,
+.task-search-toolbar .reset-btn {
+  flex-shrink: 0;
+}
+
+/* 底部状态胶囊指标群 (嵌入 DataTable #footer-left 插槽内，单行水平紧凑排布，杜绝垂直折叠) */
+.task-footer-stats {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: nowrap !important;
+  white-space: nowrap !important;
+  flex-shrink: 0;
+}
+
+.task-footer-stats .stat-pill {
+  display: inline-flex !important;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 7px;
+  border-radius: 4px;
+  font-size: 11px;
+  cursor: pointer;
+  user-select: none;
+  transition: all 0.15s ease;
+  line-height: 1.2;
+  white-space: nowrap !important;
+  flex-shrink: 0 !important;
+}
+
+.task-footer-stats .stat-pill:hover {
+  transform: translateY(-1px);
+  filter: brightness(0.95);
+}
+
+.task-footer-stats .stat-pill.is-active {
+  box-shadow: 0 0 0 1.5px currentColor;
+  font-weight: 700;
+}
+
+.task-footer-stats .stat-pill .stat-num {
+  font-weight: 700;
+}
+
+.task-footer-stats .stat-pill .stat-label {
+  font-size: 11px;
+}
+
+.task-footer-stats .stat-pill.total {
+  background: #f1f5f9;
+  color: #334155;
+}
+.task-footer-stats .stat-pill.todo {
   background: #eff6ff;
   color: #2563eb;
 }
-.stat-pill.in-progress {
+.task-footer-stats .stat-pill.in-progress {
   background: #fffbeb;
   color: #d97706;
 }
-.stat-pill.pending-review {
+.task-footer-stats .stat-pill.pending-review {
   background: #faf5ff;
   color: #9333ea;
 }
-.stat-pill.done {
+.task-footer-stats .stat-pill.done {
   background: #f0fdf4;
   color: #16a34a;
 }
-.stat-pill.overdue {
+.task-footer-stats .stat-pill.overdue {
   background: #fef2f2;
   color: #dc2626;
   font-weight: 600;
 }
 
-.header-right-actions {
-  margin-left: auto;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-/* 多维筛选栏 */
-.task-filter-toolbar {
-  background: #ffffff;
-  border-radius: 8px;
-  padding: 10px 14px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
-}
-
-.filter-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.search-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-.search-input {
-  width: 260px;
-}
-.filter-select {
-  width: 130px;
-}
-.filter-select.source-select {
-  width: 145px;
-}
-.filter-select.due-select {
-  width: 130px;
-}
-
-/* 主内容视图容器 */
+/* 主内容视图容器与 Grid 包装器 */
 .task-view-container {
   flex: 1;
   min-height: 0;
+  height: 100%;
   display: flex;
   flex-direction: column;
-  background: #ffffff;
-  border-radius: 8px;
+  background: transparent;
   overflow: hidden;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
 }
 
 .grid-view-wrapper {
@@ -1135,7 +1223,7 @@ const getPriorityTagType = (p: string) => {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  padding: 8px 12px 12px 12px;
+  padding: 0;
 }
 
 /* Grid 单元格定制 */

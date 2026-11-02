@@ -8,9 +8,11 @@
       storage-key="part_list"
       import-key="part"
       import-title="零件主数据"
+      unique-key="part_no"
       @refresh="fetchData"
       @page-change="handlePageChange"
       @size-change="handleSizeChange"
+      @cell-change="handleCellChange"
     >
       <!-- 顶部检索插槽 -->
       <template #search>
@@ -18,7 +20,8 @@
           <div class="filter-inputs">
             <el-input
               v-model="filters.keyword"
-              placeholder="搜索物料图号 / 零件名称..."
+              placeholder="搜索图号/名称..."
+              size="small"
               clearable
               :prefix-icon="Search"
               class="filter-item-input"
@@ -27,7 +30,8 @@
 
             <el-select
               v-model="filters.projectId"
-              placeholder="所属车型项目"
+              placeholder="所属项目"
+              size="small"
               clearable
               class="filter-item-select"
               @change="handleSearch"
@@ -43,11 +47,12 @@
             <el-select
               v-model="filters.category"
               placeholder="物料大类"
+              size="small"
               clearable
               class="filter-item-select"
               @change="handleSearch"
             >
-              <el-option label="全部物料分类" value="ALL" />
+              <el-option label="全部分类" value="ALL" />
               <el-option label="机械结构件" value="机械结构件" />
               <el-option label="驱动执行器" value="驱动执行器" />
               <el-option label="传感器件" value="传感器件" />
@@ -60,15 +65,17 @@
               <el-option label="其他" value="其他" />
             </el-select>
 
-            <el-button type="primary" :icon="Search" @click="handleSearch">查询</el-button>
-            <el-button :icon="Refresh" @click="handleReset">重置</el-button>
+            <el-button type="primary" size="small" :icon="Search" @click="handleSearch">查询</el-button>
+            <el-tooltip content="重置检索条件" placement="top" :show-after="500">
+              <el-button circle size="small" :icon="Refresh" @click="handleReset" />
+            </el-tooltip>
           </div>
         </div>
       </template>
 
       <!-- 工具栏按钮 -->
       <template #toolbar>
-        <el-button type="primary" :icon="Plus" @click="handleCreate">
+        <el-button type="primary" size="small" :icon="Plus" @click="handleCreate">
           新建零件
         </el-button>
       </template>
@@ -92,13 +99,6 @@
           <span class="prj-name">{{ row.project_name }}</span>
         </div>
         <span v-else class="text-muted">未绑定</span>
-      </template>
-
-      <!-- 物料大类 -->
-      <template #category="{ row }">
-        <el-tag :type="getCategoryTagType(row.category)" effect="light">
-          {{ row.category || '未归类' }}
-        </el-tag>
       </template>
 
       <!-- 图纸版本 -->
@@ -152,7 +152,7 @@ import { Search, Refresh, Plus, Edit, Delete } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import axios from 'axios'
 import DataTable from '@/components/common/DataTable/index.vue'
-import type { TableColumn } from '@/components/common/DataTable/types'
+import type { TableColumn, CellChangeEvent } from '@/components/common/DataTable/types'
 import PartForm from './PartForm.vue'
 
 interface ProjectOption {
@@ -187,40 +187,73 @@ const filters = reactive({
   category: 'ALL'
 })
 
+const getStoredPageSize = () => {
+  try {
+    const saved = localStorage.getItem('sqm_table_pagesize_part_list')
+    if (saved) {
+      const num = parseInt(saved, 10)
+      if (num && !isNaN(num)) return num
+    }
+  } catch {}
+  return 10
+}
+
 const pagination = reactive({
   page: 1,
-  pageSize: 10,
+  pageSize: getStoredPageSize(),
   total: 0
 })
 
 const columns: TableColumn[] = [
   { prop: 'part_no', label: '零件物料编码/图号', width: 160, fixed: 'left', sortable: true },
-  { prop: 'name', label: '零件中文名称', minWidth: 180, sortable: true },
+  { prop: 'name', label: '零件中文名称', minWidth: 180, sortable: true, editable: true },
   { prop: 'project', label: '所属车型/项目', minWidth: 180, slotName: 'project' },
   {
     prop: 'category',
     label: '物料分类',
-    width: 130,
+    width: 140,
     align: 'center',
     sortable: true,
-    filters: [
-      { text: '机械结构件', value: '机械结构件' },
-      { text: '驱动执行器', value: '驱动执行器' },
-      { text: '传感器件', value: '传感器件' },
-      { text: '电子电气', value: '电子电气' },
-      { text: '动力电池/电源', value: '动力电池/电源' },
-      { text: '线束接插件', value: '线束接插件' },
-      { text: '紧固标准件', value: '紧固标准件' },
-      { text: '流体气动件', value: '流体气动件' },
-      { text: '外观注塑件', value: '外观注塑件' },
-      { text: '其他', value: '其他' }
+    editable: true,
+    editType: 'select',
+    allowCreate: true,
+    options: [
+      { label: '机械结构件', value: '机械结构件', color: 'primary' },
+      { label: '驱动执行器', value: '驱动执行器', color: 'warning' },
+      { label: '传感器件', value: '传感器件', color: 'success' },
+      { label: '电子电气', value: '电子电气', color: 'danger' },
+      { label: '动力电池/电源', value: '动力电池/电源', color: 'warning' },
+      { label: '线束接插件', value: '线束接插件', color: 'primary' },
+      { label: '紧固标准件', value: '紧固标准件', color: 'info' },
+      { label: '流体气动件', value: '流体气动件', color: 'info' },
+      { label: '外观注塑件', value: '外观注塑件', color: 'primary' },
+      { label: '其他', value: '其他', color: 'info' }
     ]
   },
-  { prop: 'drawing_version', label: '图纸版本', width: 100, align: 'center', sortable: true },
-  { prop: 'engineer', label: '责任工程师', width: 120, sortable: true },
-  { prop: 'remark', label: '工艺说明与备注', minWidth: 160 },
+  { prop: 'drawing_version', label: '图纸版本', width: 110, align: 'center', sortable: true, editable: true },
+  {
+    prop: 'engineer',
+    label: '责任工程师',
+    width: 130,
+    sortable: true,
+    editable: true,
+    editType: 'select',
+    allowCreate: true,
+    options: ['张工', '李工', '王工', '赵工', '陈工', '刘工']
+  },
+  { prop: 'remark', label: '工艺说明与备注', minWidth: 160, editable: true },
   { prop: 'created_at', label: '登记时间', width: 160, sortable: true }
 ]
+
+// 单元格行内编辑与拖拽复制持久化
+const handleCellChange = async ({ row, prop, value, oldValue }: CellChangeEvent) => {
+  try {
+    await axios.put(`/api/maindata/parts/${row.id}`, { [prop]: value })
+  } catch (err: any) {
+    row[prop] = oldValue
+    ElMessage.error(err.response?.data?.detail || '保存零件修改失败，已还原')
+  }
+}
 
 const getCategoryTagType = (cat?: string) => {
   switch (cat) {
@@ -339,12 +372,17 @@ onMounted(() => {
 .filter-inputs {
   display: flex;
   align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
+  gap: 6px;
+  flex-wrap: nowrap;
 }
 
 .filter-item-input {
-  width: 240px;
+  width: 160px;
+  min-width: 120px;
+}
+
+.filter-item-select {
+  width: 115px;
 }
 
 .filter-item-select {

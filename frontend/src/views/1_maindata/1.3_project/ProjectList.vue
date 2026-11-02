@@ -8,9 +8,11 @@
       storage-key="project_list"
       import-key="project"
       import-title="新产品项目"
+      unique-key="project_code"
       @refresh="fetchData"
       @page-change="handlePageChange"
       @size-change="handleSizeChange"
+      @cell-change="handleCellChange"
     >
       <!-- 顶部检索插槽 -->
       <template #search>
@@ -18,8 +20,9 @@
           <div class="filter-inputs">
             <el-input
               v-model="filters.keyword"
-              placeholder="搜索项目代号 / 项目名称 / 平台代号..."
+              placeholder="搜索项目代号 / 名称 / 平台..."
               clearable
+              size="small"
               :prefix-icon="Search"
               class="filter-item-input"
               @keyup.enter="handleSearch"
@@ -27,8 +30,9 @@
 
             <el-select
               v-model="filters.status"
-              placeholder="项目开发状态"
+              placeholder="状态"
               clearable
+              size="small"
               class="filter-item-select"
               @change="handleSearch"
             >
@@ -39,15 +43,17 @@
               <el-option label="结束" value="结束" />
             </el-select>
 
-            <el-button type="primary" :icon="Search" @click="handleSearch">查询</el-button>
-            <el-button :icon="Refresh" @click="handleReset">重置</el-button>
+            <el-button type="primary" size="small" :icon="Search" @click="handleSearch">查询</el-button>
+            <el-tooltip content="重置检索条件" placement="top" :show-after="500">
+              <el-button size="small" :icon="Refresh" circle @click="handleReset" />
+            </el-tooltip>
           </div>
         </div>
       </template>
 
       <!-- 工具栏按钮 -->
       <template #toolbar>
-        <el-button type="primary" :icon="Plus" @click="handleCreate">
+        <el-button type="primary" size="small" :icon="Plus" @click="handleCreate">
           新建项目
         </el-button>
       </template>
@@ -79,17 +85,6 @@
         <span v-else class="text-muted">待排期</span>
       </template>
 
-      <!-- 状态 -->
-      <template #status="{ row }">
-        <el-tag :type="getStatusTagType(row.status)" effect="plain" class="status-tag">
-          {{ row.status }}
-        </el-tag>
-      </template>
-
-      <!-- 创建时间 -->
-      <template #created_at="{ row }">
-        {{ formatDateTime(row.created_at) }}
-      </template>
 
       <!-- 操作列 -->
       <template #action="{ row }">
@@ -132,7 +127,7 @@ import { Search, Refresh, Plus, Edit, Delete, Calendar } from '@element-plus/ico
 import { ElMessage } from 'element-plus'
 import axios from 'axios'
 import DataTable from '@/components/common/DataTable/index.vue'
-import type { TableColumn } from '@/components/common/DataTable/types'
+import type { TableColumn, CellChangeEvent } from '@/components/common/DataTable/types'
 import ProjectForm from './ProjectForm.vue'
 
 interface ProjectRow {
@@ -156,33 +151,56 @@ const filters = reactive({
   status: 'ALL'
 })
 
+const getStoredPageSize = () => {
+  try {
+    const saved = localStorage.getItem('sqm_table_pagesize_project_list')
+    if (saved) {
+      const num = parseInt(saved, 10)
+      if (num && !isNaN(num)) return num
+    }
+  } catch {}
+  return 10
+}
+
 const pagination = reactive({
   page: 1,
-  pageSize: 10,
+  pageSize: getStoredPageSize(),
   total: 0
 })
 
 const columns: TableColumn[] = [
   { prop: 'project_code', label: '项目唯一代号', width: 160, fixed: 'left', sortable: true },
-  { prop: 'name', label: '项目名称', minWidth: 200, sortable: true },
-  { prop: 'platform', label: '所属平台/车型', width: 160, sortable: true },
-  { prop: 'sop_date', label: '量产节点 (SOP)', width: 150, align: 'center', sortable: true },
+  { prop: 'name', label: '项目名称', minWidth: 200, sortable: true, editable: true },
+  { prop: 'platform', label: '所属平台/车型', width: 160, sortable: true, editable: true },
+  { prop: 'sop_date', label: '量产节点 (SOP)', width: 150, align: 'center', sortable: true, editable: true },
   {
     prop: 'status',
     label: '项目状态',
-    width: 110,
+    width: 120,
     align: 'center',
     sortable: true,
-    filters: [
-      { text: '立项', value: '立项' },
-      { text: '开发中', value: '开发中' },
-      { text: '量产', value: '量产' },
-      { text: '结束', value: '结束' }
+    editable: true,
+    editType: 'select',
+    options: [
+      { label: '立项', value: '立项', color: 'info' },
+      { label: '开发中', value: '开发中', color: 'primary' },
+      { label: '量产', value: '量产', color: 'success' },
+      { label: '结束', value: '结束', color: 'danger' }
     ]
   },
-  { prop: 'remark', label: '项目备忘说明', minWidth: 180 },
-  { prop: 'created_at', label: '创建时间', width: 160, sortable: true }
+  { prop: 'remark', label: '项目备忘说明', minWidth: 180, editable: true },
+  { prop: 'created_at', label: '创建时间', width: 140, sortable: true, dataType: 'datetime' }
 ]
+
+// 单元格行内编辑与拖拽复制持久化
+const handleCellChange = async ({ row, prop, value, oldValue }: CellChangeEvent) => {
+  try {
+    await axios.put(`/api/maindata/projects/${row.id}`, { [prop]: value })
+  } catch (err: any) {
+    row[prop] = oldValue
+    ElMessage.error(err.response?.data?.detail || '保存项目修改失败，已还原')
+  }
+}
 
 const getStatusTagType = (status: string) => {
   switch (status) {
@@ -280,25 +298,23 @@ onMounted(() => {
 
 .search-toolbar {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  gap: 16px;
-  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .filter-inputs {
   display: flex;
   align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
+  gap: 8px;
+  flex-wrap: nowrap;
 }
 
 .filter-item-input {
-  width: 280px;
+  width: 180px;
 }
 
 .filter-item-select {
-  width: 150px;
+  width: 110px;
 }
 
 .project-badge {
