@@ -13,6 +13,82 @@ from sqlalchemy import or_
 from app.core.database import get_db
 from app.common.excel_configs import get_excel_config
 from app.models.main_data import SqmSupplier, SqmPart, SqmProject
+import re
+import datetime
+
+
+def normalize_date_val(val: Any) -> Optional[datetime.date]:
+    """
+    智能将多种自然书写格式的日期（如 11-3, 11/05, 11月6日, 2026-11-03 等）转化为标准的 datetime.date 对象
+    """
+    if val is None:
+        return None
+    val_str = str(val).strip()
+    if not val_str or val_str in ("-", "None", "null", "未设止期", "无", "待定"):
+        return None
+
+    today = datetime.date.today()
+    current_year = today.year
+
+    # 0. 相对自然语言日期解析 (如 本周, 今天, 明天, 下周)
+    if val_str in ("今天", "今日"):
+        return today
+    if val_str in ("明天", "次日"):
+        return today + datetime.timedelta(days=1)
+    if val_str == "后天":
+        return today + datetime.timedelta(days=2)
+    if "本周" in val_str:
+        # 本周五 (weekday 4: 0=Monday...4=Friday)
+        days_ahead = 4 - today.weekday()
+        if days_ahead < 0:
+            days_ahead += 7
+        return today + datetime.timedelta(days=days_ahead)
+    if "下周" in val_str:
+        days_ahead = (4 - today.weekday()) + 7
+        return today + datetime.timedelta(days=days_ahead)
+    if "月底" in val_str:
+        import calendar
+        _, last_day = calendar.monthrange(today.year, today.month)
+        return datetime.date(today.year, today.month, last_day)
+
+    # 1. 完整年月日: YYYY-MM-DD 或 YYYY/MM/DD 或 YYYY.MM.DD
+    m1 = re.match(r"^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})", val_str)
+    if m1:
+        y, m, d = int(m1.group(1)), int(m1.group(2)), int(m1.group(3))
+        try:
+            return datetime.date(y, m, d)
+        except ValueError:
+            return None
+
+    # 2. 中文年月日: YYYY年MM月DD日
+    m2 = re.match(r"^(\d{4})年(\d{1,2})月(\d{1,2})日?", val_str)
+    if m2:
+        y, m, d = int(m2.group(1)), int(m2.group(2)), int(m2.group(3))
+        try:
+            return datetime.date(y, m, d)
+        except ValueError:
+            return None
+
+    # 3. 简写月日: MM-DD 或 MM/DD 或 MM.DD (如 11-3, 11/5, 11.6)
+    m3 = re.match(r"^(\d{1,2})[-/.](\d{1,2})$", val_str)
+    if m3:
+        m, d = int(m3.group(1)), int(m3.group(2))
+        try:
+            return datetime.date(current_year, m, d)
+        except ValueError:
+            return None
+
+    # 4. 中文月日: MM月DD日 (如 11月3日, 11月6)
+    m4 = re.match(r"^(\d{1,2})月(\d{1,2})日?$", val_str)
+    if m4:
+        m, d = int(m4.group(1)), int(m4.group(2))
+        try:
+            return datetime.date(current_year, m, d)
+        except ValueError:
+            return None
+
+    return None
+
 
 router = APIRouter(
     prefix="/api/smart-import",
@@ -179,6 +255,17 @@ def commit_smart_import(
                 if val and val in fk_cache.get(fk_target, {}):
                     clean_dict[fk_field] = fk_cache[fk_target][val]
 
+            # 兼容字段别名 (如 task 实体的 schedule / 截止 映射至 due_date)
+            if biz_key == "task":
+                if "schedule" in clean_dict and "due_date" not in clean_dict:
+                    clean_dict["due_date"] = clean_dict["schedule"]
+                if "截止" in clean_dict and "due_date" not in clean_dict:
+                    clean_dict["due_date"] = clean_dict["截止"]
+                if "截止日期" in clean_dict and "due_date" not in clean_dict:
+                    clean_dict["due_date"] = clean_dict["截止日期"]
+                if "计划截止日" in clean_dict and "due_date" not in clean_dict:
+                    clean_dict["due_date"] = clean_dict["计划截止日"]
+
             # 仅保留数据库有效字段
             filtered_payload = {k: v for k, v in clean_dict.items() if k in valid_cols and k != "id"}
 
@@ -215,16 +302,40 @@ def commit_smart_import(
                     filtered_payload["name"] = filtered_payload.get("project_code") or "新建项目"
                 if not filtered_payload.get("status") or str(filtered_payload["status"]).strip() in ("", "-"):
                     filtered_payload["status"] = "立项"
+                if "sop_date" in filtered_payload:
+                    filtered_payload["sop_date"] = normalize_date_val(filtered_payload["sop_date"])
 
             elif biz_key == "task":
                 if not filtered_payload.get("title") or str(filtered_payload["title"]).strip() in ("", "-"):
                     filtered_payload["title"] = filtered_payload.get("task_code") or "新建待办协同任务"
                 if not filtered_payload.get("status") or str(filtered_payload["status"]).strip() in ("", "-"):
                     filtered_payload["status"] = "TODO"
-                if not filtered_payload.get("priority") or str(filtered_payload["priority"]).strip() in ("", "-"):
+
+                # 优先级中英智能映射
+                p_val = str(filtered_payload.get("priority", "")).strip()
+                p_map = {
+                    "重要": "HIGH",
+                    "重点关注": "HIGH",
+                    "紧急": "URGENT",
+                    "紧急红线": "URGENT",
+                    "CTQ红线": "URGENT",
+                    "普通": "MEDIUM",
+                    "中": "MEDIUM",
+                    "低": "LOW",
+                }
+                if p_val in p_map:
+                    filtered_payload["priority"] = p_map[p_val]
+                elif not filtered_payload.get("priority") or str(filtered_payload["priority"]).strip() in ("", "-"):
                     filtered_payload["priority"] = "MEDIUM"
+
+                # 日期自愈与规范化 (将 11-3 等自动转为 2026-11-03)
+                if "due_date" in filtered_payload:
+                    filtered_payload["due_date"] = normalize_date_val(filtered_payload["due_date"])
+                if "start_date" in filtered_payload:
+                    filtered_payload["start_date"] = normalize_date_val(filtered_payload["start_date"])
+
                 if not filtered_payload.get("task_code") or str(filtered_payload["task_code"]).strip() in ("", "-"):
-                    import datetime, random
+                    import random
                     filtered_payload["task_code"] = f"TSK-{datetime.datetime.now().strftime('%Y%m')}-{random.randint(100, 999)}"
 
             key_val = str(clean_dict.get(unique_key, "")).strip() if unique_key else None

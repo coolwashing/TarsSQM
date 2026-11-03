@@ -147,87 +147,28 @@
             <el-tab-pane label="数据字典" name="columns">
               <div class="columns-pane-content">
 
-                <el-table
-                  v-loading="loadingColumns"
+                <DataTable
+                  :columns="dictTableColumns"
                   :data="columnsData"
-                  border
-                  stripe
-                  class="dict-table"
-                  height="100%"
+                  :loading="loadingColumns"
+                  storage-key="db_studio_dict"
+                  @refresh="fetchColumns"
+                  @cell-change="handleDictCellChange"
                 >
-                  <el-table-column type="index" label="序号" width="60" align="center" />
-                  <el-table-column prop="column_name" label="字段物理名" min-width="180">
-                    <template #default="{ row }">
-                      <div class="col-name-cell">
-                        <span class="col-name-text">{{ row.column_name }}</span>
-                        <el-tag v-if="row.is_primary" size="small" type="danger" effect="plain" class="pk-tag">
-                          🔑 主键
-                        </el-tag>
-                      </div>
-                    </template>
-                  </el-table-column>
-
-                  <el-table-column prop="column_comment" min-width="260">
-                    <template #header>
-                      <div class="comment-col-header">
-                        <span>业务注释</span>
-                        <el-tooltip content="双击单元格或点击编辑图标，可直接就地修改物理字段的字典释义" placement="top" :show-after="500">
-                          <el-icon class="header-tip-icon"><QuestionFilled /></el-icon>
-                        </el-tooltip>
-                      </div>
-                    </template>
-                    <template #default="{ row }">
-                      <div class="comment-edit-cell" @dblclick="handleStartEditComment(row)">
-                        <template v-if="editingColComment && editingColComment.column_name === row.column_name">
-                          <el-input
-                            v-model="editingColComment.tempComment"
-                            size="small"
-                            placeholder="输入业务释义，回车或失焦保存"
-                            autofocus
-                            @blur="handleSaveColumnComment(row)"
-                            @keyup.enter="handleSaveColumnComment(row)"
-                            @keyup.esc="editingColComment = null"
-                          />
-                        </template>
-                        <template v-else>
-                          <span class="comment-text" :class="{ 'no-comment': !row.column_comment }">
-                            {{ row.column_comment || '（暂无注释，双击补充）' }}
-                          </span>
-                          <el-button
-                            link
-                            type="primary"
-                            :icon="Edit"
-                            size="small"
-                            class="edit-comment-btn"
-                            @click.stop="handleStartEditComment(row)"
-                          />
-                        </template>
-                      </div>
-                    </template>
-                  </el-table-column>
-
-                  <el-table-column prop="column_type" label="数据类型" width="160">
-                    <template #default="{ row }">
-                      <el-tag size="small" type="info" effect="light" class="type-tag">
-                        {{ row.column_type }}
+                  <template #column_name="{ row }">
+                    <div class="col-name-cell">
+                      <span class="col-name-text">{{ row.column_name }}</span>
+                      <el-tag v-if="row.is_primary" size="small" type="danger" effect="plain" class="pk-tag">
+                        🔑 主键
                       </el-tag>
-                    </template>
-                  </el-table-column>
-
-                  <el-table-column prop="is_nullable" label="允许为空" width="95" align="center">
-                    <template #default="{ row }">
-                      <el-tag size="small" :type="row.is_nullable ? 'success' : 'warning'" effect="plain">
-                        {{ row.is_nullable ? '是' : '否' }}
-                      </el-tag>
-                    </template>
-                  </el-table-column>
-
-                  <el-table-column prop="column_default" label="默认值" width="130" align="center">
-                    <template #default="{ row }">
-                      <code class="default-val">{{ row.column_default !== null ? row.column_default : '-' }}</code>
-                    </template>
-                  </el-table-column>
-                </el-table>
+                    </div>
+                  </template>
+                  <template #is_nullable="{ row }">
+                    <el-tag size="small" :type="row.is_nullable ? 'success' : 'warning'" effect="plain">
+                      {{ row.is_nullable ? '是' : '否' }}
+                    </el-tag>
+                  </template>
+                </DataTable>
               </div>
             </el-tab-pane>
 
@@ -239,10 +180,13 @@
                   :data="rowsData"
                   :loading="loadingRows"
                   :pagination="pagination"
+                  allow-quick-add
+                  quick-add-placeholder="快速添加数据行..."
                   @refresh="fetchRows"
                   @page-change="handlePageChange"
                   @size-change="handleSizeChange"
                   @cell-change="handleCellChange"
+                  @quick-add="handleQuickAddRow"
                 >
                   <!-- 顶部搜索 -->
                   <template #search>
@@ -658,6 +602,7 @@ const dynamicTableColumns = computed<TableColumn[]>(() => {
   if (!columnsData.value.length) return []
   return columnsData.value.map((col) => {
     const isPk = col.is_primary
+    const isDate = ['date', 'datetime', 'timestamp'].includes(col.data_type.toLowerCase())
     return {
       prop: col.column_name,
       label: formatColumnLabel(col),
@@ -666,7 +611,10 @@ const dynamicTableColumns = computed<TableColumn[]>(() => {
       align: isPk ? 'center' : 'left',
       sortable: true,
       showOverflowTooltip: true,
-      editable: !isPk && !['text', 'mediumtext', 'longtext', 'json'].includes(col.data_type)
+      dataType: isPk ? 'code' : (isDate ? 'date' : undefined),
+      editable: !isPk && !['text', 'mediumtext', 'longtext', 'json'].includes(col.data_type.toLowerCase()),
+      editType: isDate ? 'date' : 'input',
+      quickAddDisabled: isPk
     }
   })
 })
@@ -839,6 +787,25 @@ const handleCellChange = async (event: CellChangeEvent) => {
     // 恢复旧值
     event.row[event.prop] = event.oldValue
     ElMessage.error(`保存修改失败: ${err.response?.data?.detail || err.message}`)
+  }
+}
+
+// 快速行底加行 (通过 DataTable 的 quick-add 事件)
+const handleQuickAddRow = async (payload: Record<string, any>, done: () => void) => {
+  const table = currentTable.value
+  if (!table) return
+  try {
+    await axios.post(`/api/dev/db/tables/${table.table_name}/rows`, {
+      values: payload
+    })
+    ElMessage.success('记录已成功创建')
+    done()
+    fetchRows()
+    if (table.real_count !== undefined) {
+      table.real_count += 1
+    }
+  } catch (err: any) {
+    ElMessage.error(`快速创建失败: ${err.response?.data?.detail || err.message}`)
   }
 }
 

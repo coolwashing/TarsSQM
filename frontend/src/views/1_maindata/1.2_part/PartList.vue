@@ -9,10 +9,14 @@
       import-key="part"
       import-title="零件主数据"
       unique-key="part_no"
+      allow-quick-add
+      quick-add-placeholder="快速登记新零件物料..."
+      :quick-add-defaults="{ category: '机械结构件', drawing_version: 'A.0' }"
       @refresh="fetchData"
       @page-change="handlePageChange"
       @size-change="handleSizeChange"
       @cell-change="handleCellChange"
+      @quick-add="handleQuickAdd"
     >
       <!-- 顶部检索插槽 -->
       <template #search>
@@ -80,17 +84,7 @@
         </el-button>
       </template>
 
-      <!-- 零件编码/图号 -->
-      <template #part_no="{ row }">
-        <span class="part-badge">{{ row.part_no }}</span>
-      </template>
-
-      <!-- 零件名称 -->
-      <template #name="{ row }">
-        <strong>{{ row.name }}</strong>
-      </template>
-
-      <!-- 所属项目 -->
+      <!-- 所属项目复合展示插槽 -->
       <template #project="{ row }">
         <div v-if="row.project_code" class="project-tag-box">
           <el-tag size="small" type="info" effect="plain" class="prj-code">
@@ -99,16 +93,6 @@
           <span class="prj-name">{{ row.project_name }}</span>
         </div>
         <span v-else class="text-muted">未绑定</span>
-      </template>
-
-      <!-- 图纸版本 -->
-      <template #drawing_version="{ row }">
-        <span class="version-badge">v{{ row.drawing_version || 'A.0' }}</span>
-      </template>
-
-      <!-- 登记时间 -->
-      <template #created_at="{ row }">
-        {{ formatDateTime(row.created_at) }}
       </template>
 
       <!-- 操作列 -->
@@ -205,9 +189,18 @@ const pagination = reactive({
 })
 
 const columns: TableColumn[] = [
-  { prop: 'part_no', label: '零件物料编码/图号', width: 160, fixed: 'left', sortable: true },
-  { prop: 'name', label: '零件中文名称', minWidth: 180, sortable: true, editable: true },
-  { prop: 'project', label: '所属车型/项目', minWidth: 180, slotName: 'project' },
+  {
+    prop: 'part_no',
+    label: '零件物料编码/图号',
+    width: 160,
+    fixed: 'left',
+    sortable: true,
+    dataType: 'code',
+    editable: true,
+    editType: 'input'
+  },
+  { prop: 'name', label: '零件中文名称', minWidth: 180, sortable: true, editable: true, editType: 'input' },
+  { prop: 'project', label: '所属车型/项目', minWidth: 180, slotName: 'project', quickAddDisabled: true },
   {
     prop: 'category',
     label: '物料分类',
@@ -230,7 +223,7 @@ const columns: TableColumn[] = [
       { label: '其他', value: '其他', color: 'info' }
     ]
   },
-  { prop: 'drawing_version', label: '图纸版本', width: 110, align: 'center', sortable: true, editable: true },
+  { prop: 'drawing_version', label: '图纸版本', width: 110, align: 'center', sortable: true, editable: true, editType: 'input' },
   {
     prop: 'engineer',
     label: '责任工程师',
@@ -241,8 +234,8 @@ const columns: TableColumn[] = [
     allowCreate: true,
     options: ['张工', '李工', '王工', '赵工', '陈工', '刘工']
   },
-  { prop: 'remark', label: '工艺说明与备注', minWidth: 160, editable: true },
-  { prop: 'created_at', label: '登记时间', width: 160, sortable: true }
+  { prop: 'remark', label: '工艺说明与备注', minWidth: 160, editable: true, editType: 'input' },
+  { prop: 'created_at', label: '登记时间', width: 160, sortable: true, dataType: 'datetime' }
 ]
 
 // 单元格行内编辑与拖拽复制持久化
@@ -344,6 +337,23 @@ const handleDelete = async (row: PartRow) => {
     fetchData()
   } catch (err: any) {
     ElMessage.error(`删除零件失败: ${err.response?.data?.detail || err.message}`)
+  }
+}
+
+const handleQuickAdd = async (payload: Record<string, any>, done: () => void) => {
+  if (payload.part_no && payload.name) {
+    try {
+      await axios.post('/api/maindata/parts', payload)
+      ElMessage.success('新零件创建成功')
+      done()
+      fetchData()
+    } catch (err: any) {
+      ElMessage.error(`快速创建失败: ${err.response?.data?.detail || err.message}`)
+    }
+  } else {
+    ElMessage.info('正在开启详细创建抽屉以完善零件信息...')
+    partFormRef.value?.openCreate(payload)
+    done()
   }
 }
 

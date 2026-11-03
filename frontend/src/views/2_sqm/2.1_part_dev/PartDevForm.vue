@@ -263,8 +263,11 @@ const resetForm = () => {
 }
 
 // 打开新建抽屉
-const openCreate = async () => {
+const openCreate = async (initialData?: Partial<PartDevModel>) => {
   resetForm()
+  if (initialData) {
+    Object.assign(form, initialData)
+  }
   visible.value = true
   await loadBaseOptions()
   nextTick(() => {

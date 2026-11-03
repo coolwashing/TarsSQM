@@ -171,8 +171,11 @@ const resetForm = () => {
 }
 
 // 打开新建抽屉
-const openCreate = () => {
+const openCreate = (initialData?: Partial<ProjectModel>) => {
   resetForm()
+  if (initialData) {
+    Object.assign(form, initialData)
+  }
   visible.value = true
   nextTick(() => {
     captureInitialState()

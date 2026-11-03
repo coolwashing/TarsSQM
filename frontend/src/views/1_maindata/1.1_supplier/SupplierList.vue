@@ -9,10 +9,14 @@
       import-key="supplier"
       import-title="供应商主数据"
       unique-key="code"
+      allow-quick-add
+      quick-add-placeholder="快速添加新供应商..."
+      :quick-add-defaults="{ status: '合格', supply_tier: '1供' }"
       @refresh="fetchData"
       @page-change="handlePageChange"
       @size-change="handleSizeChange"
       @cell-change="handleCellChange"
+      @quick-add="handleQuickAdd"
     >
       <!-- 顶部检索插槽 -->
       <template #search>
@@ -71,11 +75,6 @@
         <el-button type="primary" size="small" :icon="Plus" @click="handleCreate">
           新建供应商
         </el-button>
-      </template>
-
-      <!-- 列自定义插槽 -->
-      <template #code="{ row }">
-        <span class="code-badge">{{ row.code }}</span>
       </template>
 
       <template #name="{ row }">
@@ -222,7 +221,17 @@ const pagination = reactive({
 
 // 列配置定义 (纯配置驱动：支持飞书多维表格单选/多选胶囊、就地创建、键盘流导航与列拖拽)
 const columns = reactive<TableColumn[]>([
-  { prop: 'code', label: '供应商简称', width: 120, fixed: 'left', sortable: true, align: 'center' },
+  {
+    prop: 'code',
+    label: '供应商简称',
+    width: 120,
+    fixed: 'left',
+    sortable: true,
+    align: 'center',
+    dataType: 'code',
+    editable: true,
+    editType: 'input'
+  },
   { prop: 'name', label: '企业全称', minWidth: 220, sortable: true, editable: true },
   {
     prop: 'supply_tier',
@@ -405,6 +414,23 @@ const handleCellChange = async ({ row, prop, value, oldValue }: CellChangeEvent)
   } catch (err: any) {
     row[prop] = oldValue
     ElMessage.error(`行内修改保存失败: ${err.response?.data?.detail || err.message}`)
+  }
+}
+
+const handleQuickAdd = async (payload: Record<string, any>, done: () => void) => {
+  if (payload.code && payload.name) {
+    try {
+      await axios.post('/api/maindata/suppliers', payload)
+      ElMessage.success('新供应商创建成功')
+      done()
+      fetchData()
+    } catch (err: any) {
+      ElMessage.error(`快速创建失败: ${err.response?.data?.detail || err.message}`)
+    }
+  } else {
+    ElMessage.info('正在开启详细创建抽屉以完善供应商信息...')
+    supplierFormRef.value?.openCreate(payload)
+    done()
   }
 }
 

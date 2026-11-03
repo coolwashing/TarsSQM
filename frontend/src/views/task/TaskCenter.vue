@@ -20,6 +20,18 @@
           ⚡ 预置仿真任务
         </el-button>
 
+        <!-- AI 智能识别与提取任务入口 -->
+        <el-button
+          size="small"
+          type="success"
+          plain
+          :icon="MagicStick"
+          class="ai-header-btn"
+          @click="openAiImportModal"
+        >
+          ✨ AI 智能录入
+        </el-button>
+
         <!-- 信标 5 & 6：去除重复加号，只保留加号图标与清晰文字 -->
         <el-button
           size="small"
@@ -37,6 +49,7 @@
       <!-- 视图 A：总任务表 (集成 AI 录入、列配置、就地加行、紧凑内边距与底部状态胶囊) -->
       <div v-show="viewMode === 'grid'" class="grid-view-wrapper">
         <DataTable
+          ref="dataTableRef"
           :columns="columns"
           :data="tableData"
           :loading="loading"
@@ -227,13 +240,6 @@
             <el-tag :type="getPriorityTagType(row.priority)" size="small" effect="light">
               {{ getPriorityLabel(row.priority) }}
             </el-tag>
-          </template>
-
-          <!-- 计划起止列插槽 -->
-          <template #schedule="{ row }">
-            <div class="schedule-cell" :class="{ 'is-overdue': row.is_overdue }">
-              <span>{{ row.due_date || '未设止期' }}</span>
-            </div>
           </template>
 
           <!-- 状态列插槽 (支持就地下拉快速流转) -->
@@ -624,12 +630,17 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, onActivated, onDeactivated, nextTick, defineAsyncComponent } from 'vue'
 import { useRouter } from 'vue-router'
-import { Plus, Search, Refresh } from '@element-plus/icons-vue'
+import { Plus, Search, Refresh, MagicStick } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import DataTable from '@/components/common/DataTable/index.vue'
 import type { TableColumn, CellChangeEvent } from '@/components/common/DataTable/types'
 import { taskApi } from '@/api/task'
 import type { TaskItem, TaskSummaryStats, TaskStatus, TaskPriority, TaskSourceType } from '@/types/task'
+
+const dataTableRef = ref<any>(null)
+const openAiImportModal = () => {
+  dataTableRef.value?.openAiImport()
+}
 
 const TaskEditModal = defineAsyncComponent(() => import('./components/TaskEditModal.vue'))
 const TaskCalendarView = defineAsyncComponent(() => import('./components/TaskCalendarView.vue'))
@@ -705,9 +716,9 @@ const editingTask = ref<Partial<TaskItem> | null>(null)
 
 // 列定义配置 (支持双击快编与防御性排版)
 const columns: TableColumn[] = [
-  { prop: 'task_code', label: '流水编号', width: '135px', sortable: true },
-  { prop: 'title', label: '任务标题 / 验收主题', minWidth: '220px', sortable: true, editable: true },
-  { prop: 'source', label: '业务源头', minWidth: '180px' },
+  { prop: 'task_code', label: '流水编号', width: '135px', sortable: true, dataType: 'code' },
+  { prop: 'title', label: '任务标题 / 验收主题', minWidth: '220px', sortable: true, editable: true, editType: 'input' },
+  { prop: 'source', label: '业务源头', minWidth: '180px', slotName: 'source' },
   {
     prop: 'priority',
     label: '优先级',
@@ -716,17 +727,17 @@ const columns: TableColumn[] = [
     sortable: true,
     editable: true,
     editType: 'select',
-    editOptions: [
-      { label: '🔴 紧急红线', value: 'URGENT' },
-      { label: '🟡 重点关注', value: 'HIGH' },
-      { label: '🟢 普通', value: 'MEDIUM' },
-      { label: '⚪ 低', value: 'LOW' }
+    options: [
+      { label: '🔴 紧急红线', value: 'URGENT', color: 'danger' },
+      { label: '🟡 重点关注', value: 'HIGH', color: 'warning' },
+      { label: '🟢 普通', value: 'MEDIUM', color: 'primary' },
+      { label: '⚪ 低', value: 'LOW', color: 'info' }
     ]
   },
-  { prop: 'assignee_name', label: '责任人', width: '120px', sortable: true, editable: true },
-  { prop: 'schedule', label: '计划截止日', width: '130px', align: 'center', sortable: true },
-  { prop: 'status', label: '流转状态', width: '120px', align: 'center' },
-  { prop: 'attachment_count', label: '附件', width: '75px', align: 'center' }
+  { prop: 'assignee_name', label: '责任人', width: '120px', sortable: true, editable: true, editType: 'input' },
+  { prop: 'due_date', label: '计划截止日', width: '130px', align: 'center', sortable: true, dataType: 'date', editable: true, editType: 'date' },
+  { prop: 'status', label: '流转状态', width: '120px', align: 'center', slotName: 'status' },
+  { prop: 'attachment_count', label: '附件', width: '75px', align: 'center', slotName: 'attachment_count' }
 ]
 
 // 看板分类计算
@@ -1071,15 +1082,19 @@ const getPriorityLabel = (p: string) => {
     URGENT: 'CTQ红线',
     HIGH: '重点关注',
     MEDIUM: '普通',
-    LOW: '低'
+    LOW: '低',
+    '重要': '重点关注',
+    '重点关注': '重点关注',
+    '紧急': 'CTQ红线',
+    '红线': 'CTQ红线'
   }
   return map[p] || p
 }
 
 const getPriorityTagType = (p: string) => {
-  if (p === 'URGENT') return 'danger'
-  if (p === 'HIGH') return 'warning'
-  if (p === 'MEDIUM') return 'primary'
+  if (p === 'URGENT' || p === '紧急' || p === '红线') return 'danger'
+  if (p === 'HIGH' || p === '重要' || p === '重点关注') return 'warning'
+  if (p === 'MEDIUM' || p === '普通') return 'primary'
   return 'info'
 }
 </script>

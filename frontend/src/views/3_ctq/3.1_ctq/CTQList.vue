@@ -8,9 +8,14 @@
       storage-key="ctq_list"
       import-key="ctq"
       import-title="CTQ关键质量特性"
+      allow-quick-add
+      quick-add-placeholder="快速添加新关键质量特性 (CTQ)..."
+      :quick-add-defaults="{ feature_type: 'KPC', frequency: '首末件+每批5件' }"
       @refresh="fetchData"
       @page-change="handlePageChange"
       @size-change="handleSizeChange"
+      @cell-change="handleCellChange"
+      @quick-add="handleQuickAdd"
     >
       <!-- 顶部检索插槽 -->
       <template #search>
@@ -71,51 +76,12 @@
         </el-button>
       </template>
 
-      <!-- 特征代号 -->
-      <template #feature_code="{ row }">
-        <span class="code-badge">{{ row.feature_code }}</span>
-      </template>
-
-      <!-- 特性类别 -->
-      <template #feature_type="{ row }">
-        <el-tag
-          :type="row.feature_type === 'KPC' ? 'primary' : 'warning'"
-          effect="dark"
-          class="type-tag"
-        >
-          {{ row.feature_type }}
-        </el-tag>
-      </template>
-
-      <!-- 特性中文名称 -->
-      <template #feature_name="{ row }">
-        <strong>{{ row.feature_name }}</strong>
-      </template>
-
-      <!-- 关联零部件 -->
+      <!-- 关联零部件复合展示插槽 -->
       <template #part="{ row }">
         <div class="part-box">
           <span class="part-badge">{{ row.part_no }}</span>
           <span class="part-name">{{ row.part_name }}</span>
         </div>
-      </template>
-
-      <!-- 标称值 -->
-      <template #standard_value="{ row }">
-        <span v-if="row.standard_value" class="nominal-val">{{ row.standard_value }}</span>
-        <span v-else class="text-muted">-</span>
-      </template>
-
-      <!-- 公差/控制规格 -->
-      <template #tolerance="{ row }">
-        <span class="tolerance-badge">{{ row.tolerance }}</span>
-      </template>
-
-      <!-- 检验频次 -->
-      <template #frequency="{ row }">
-        <el-tag size="small" type="info" effect="plain">
-          {{ row.frequency }}
-        </el-tag>
       </template>
 
       <!-- 操作列 -->
@@ -159,7 +125,7 @@ import { Search, Refresh, Plus, Edit, Delete } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import axios from 'axios'
 import DataTable from '@/components/common/DataTable/index.vue'
-import type { TableColumn } from '@/components/common/DataTable/types'
+import type { TableColumn, CellChangeEvent } from '@/components/common/DataTable/types'
 import CTQForm from './CTQForm.vue'
 
 interface PartOption {
@@ -199,31 +165,103 @@ const filters = reactive({
   partId: undefined as number | undefined
 })
 
+const getStoredPageSize = (storageKey: string, fallback = 10) => {
+  try {
+    const v = localStorage.getItem(`${storageKey}_pagesize`)
+    return v ? Number(v) || fallback : fallback
+  } catch {
+    return fallback
+  }
+}
+
 const pagination = reactive({
   page: 1,
-  pageSize: 10,
+  pageSize: getStoredPageSize('ctq_list', 10),
   total: 0
 })
 
 const columns: TableColumn[] = [
-  { prop: 'feature_code', label: '特征代号', width: 130, fixed: 'left', sortable: true },
+  {
+    prop: 'feature_code',
+    label: '特征代号',
+    width: 130,
+    fixed: 'left',
+    sortable: true,
+    dataType: 'code',
+    editable: true,
+    editType: 'input'
+  },
   {
     prop: 'feature_type',
     label: '特性类别',
-    width: 110,
+    width: 120,
     align: 'center',
     sortable: true,
+    editable: true,
+    editType: 'select',
+    options: [
+      { label: 'KPC (产品关键特性)', value: 'KPC', color: 'primary' },
+      { label: 'KCC (过程关键特性)', value: 'KCC', color: 'warning' }
+    ],
+    colorMap: {
+      KPC: 'primary',
+      KCC: 'warning'
+    },
     filters: [
       { text: 'KPC (产品关键特性)', value: 'KPC' },
       { text: 'KCC (过程关键特性)', value: 'KCC' }
     ]
   },
-  { prop: 'feature_name', label: '特性中文名称', minWidth: 180, sortable: true },
-  { prop: 'part', label: '关联零部件', minWidth: 180, slotName: 'part' },
-  { prop: 'standard_value', label: '标称值', width: 120, align: 'center', sortable: true },
-  { prop: 'tolerance', label: '公差/控制规格', minWidth: 160 },
-  { prop: 'inspection_tool', label: '测量量具', width: 160, sortable: true },
-  { prop: 'frequency', label: '检验频次', width: 160 }
+  {
+    prop: 'feature_name',
+    label: '特性中文名称',
+    minWidth: 180,
+    sortable: true,
+    editable: true,
+    editType: 'input'
+  },
+  {
+    prop: 'part',
+    label: '关联零部件',
+    minWidth: 180,
+    slotName: 'part',
+    quickAddDisabled: true
+  },
+  {
+    prop: 'standard_value',
+    label: '标称值',
+    width: 120,
+    align: 'center',
+    sortable: true,
+    editable: true,
+    editType: 'input'
+  },
+  {
+    prop: 'tolerance',
+    label: '公差/控制规格',
+    minWidth: 160,
+    editable: true,
+    editType: 'input'
+  },
+  {
+    prop: 'inspection_tool',
+    label: '测量量具',
+    width: 160,
+    sortable: true,
+    editable: true,
+    editType: 'select',
+    allowCreate: true,
+    options: ['游标卡尺', '数显千分尺', '三坐标测量机 (CMM)', '粗糙度仪', '光学投影仪', '螺纹通止规', '洛氏硬度计']
+  },
+  {
+    prop: 'frequency',
+    label: '检验频次',
+    width: 160,
+    editable: true,
+    editType: 'select',
+    allowCreate: true,
+    options: ['首末件+每批5件', '100%全检', '每小时2件', '首件必检', '每批10件']
+  }
 ]
 
 const loadPartOptions = async () => {
@@ -281,7 +319,7 @@ const handleSizeChange = (s: number) => {
 }
 
 const handleCreate = () => {
-  ctqFormRef.value?.openCreate()
+  ctqFormRef.value?.openCreate(filters.partId)
 }
 
 const handleEdit = (row: CtqRow) => {
@@ -295,6 +333,46 @@ const handleDelete = async (row: CtqRow) => {
     fetchData()
   } catch (err: any) {
     ElMessage.error(`删除失败: ${err.response?.data?.detail || err.message}`)
+  }
+}
+
+const handleCellChange = async (event: CellChangeEvent) => {
+  try {
+    await axios.put(`/api/ctq/${event.row.id}`, {
+      [event.prop]: event.value
+    })
+    ElMessage.success({
+      message: `已自动更新 [${event.prop}]`,
+      duration: 1500
+    })
+  } catch (err: any) {
+    ElMessage.error(`更新失败: ${err.response?.data?.detail || err.message}`)
+    fetchData()
+  }
+}
+
+const handleQuickAdd = async (payload: Record<string, any>, done: () => void) => {
+  const partId = payload.part_id || filters.partId
+  if (partId && payload.feature_name && payload.tolerance) {
+    try {
+      if (!payload.feature_code) {
+        payload.feature_code = `CTQ-${Date.now().toString().slice(-4)}`
+      }
+      payload.part_id = partId
+      await axios.post('/api/ctq', payload)
+      ElMessage.success('CTQ 关键特性创建成功')
+      done()
+      fetchData()
+    } catch (err: any) {
+      ElMessage.error(`快速创建失败: ${err.response?.data?.detail || err.message}`)
+    }
+  } else {
+    ElMessage.info('正在开启详细配置抽屉以指定归属零件与公差规格...')
+    if (filters.partId) {
+      payload.part_id = filters.partId
+    }
+    ctqFormRef.value?.openCreate(payload)
+    done()
   }
 }
 

@@ -400,6 +400,7 @@ def get_quality_issue_detail(issue_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/issues", response_model=QualityIssueOut, status_code=status.HTTP_201_CREATED, summary="新建质量问题异常记录")
+@router.post("/quality-issues", response_model=QualityIssueOut, status_code=status.HTTP_201_CREATED, include_in_schema=False)
 def create_quality_issue(payload: QualityIssueCreate, db: Session = Depends(get_db)):
     issue_no = payload.issue_no.strip() if payload.issue_no and payload.issue_no.strip() else generate_issue_no(db)
 
@@ -429,6 +430,7 @@ def create_quality_issue(payload: QualityIssueCreate, db: Session = Depends(get_
 
 
 @router.put("/issues/{issue_id}", response_model=QualityIssueOut, summary="更新质量问题记录与改善方案")
+@router.put("/quality-issues/{issue_id}", response_model=QualityIssueOut, include_in_schema=False)
 def update_quality_issue(issue_id: int, payload: QualityIssueUpdate, db: Session = Depends(get_db)):
     issue = db.query(SqmQualityIssue).filter(SqmQualityIssue.id == issue_id).first()
     if not issue:
@@ -449,6 +451,7 @@ def update_quality_issue(issue_id: int, payload: QualityIssueUpdate, db: Session
 
 
 @router.delete("/issues/{issue_id}", summary="删除质量问题记录")
+@router.delete("/quality-issues/{issue_id}", include_in_schema=False)
 def delete_quality_issue(issue_id: int, db: Session = Depends(get_db)):
     issue = db.query(SqmQualityIssue).filter(SqmQualityIssue.id == issue_id).first()
     if not issue:

@@ -8,9 +8,14 @@
       storage-key="quality_issue_list"
       import-key="quality_issue"
       import-title="质量问题台账"
+      allow-quick-add
+      quick-add-placeholder="快速登记新质量问题简述..."
+      :quick-add-defaults="{ severity: '一般', status: '登记', occurred_date: new Date().toISOString().slice(0, 10) }"
       @refresh="fetchData"
       @page-change="handlePageChange"
       @size-change="handleSizeChange"
+      @cell-change="handleCellChange"
+      @quick-add="handleQuickAdd"
     >
       <!-- 顶部检索插槽 -->
       <template #search>
@@ -71,55 +76,13 @@
         </el-button>
       </template>
 
-      <!-- 单号 -->
-      <template #issue_no="{ row }">
-        <span class="issue-badge" :class="`severity-${row.severity}`">{{ row.issue_no }}</span>
-      </template>
-
-      <!-- 标题 -->
-      <template #title="{ row }">
-        <strong>{{ row.title }}</strong>
-      </template>
-
-      <!-- 严重等级 -->
-      <template #severity="{ row }">
-        <el-tag :type="getSeverityTagType(row.severity)" effect="dark" class="severity-tag">
-          {{ row.severity }}
-        </el-tag>
-      </template>
-
-      <!-- 闭环状态 -->
-      <template #status="{ row }">
-        <el-tag :type="getStatusTagType(row.status)" effect="plain" class="status-tag">
-          {{ row.status }}
-        </el-tag>
-      </template>
-
-      <!-- 关联零部件 -->
+      <!-- 关联零部件复合展示插槽 -->
       <template #part="{ row }">
         <div v-if="row.part_no" class="part-cell">
           <span class="part-code">{{ row.part_no }}</span>
           <span class="part-name">{{ row.part_name }}</span>
         </div>
         <span v-else class="text-muted">-</span>
-      </template>
-
-      <!-- 供应商 -->
-      <template #supplier_name="{ row }">
-        <span v-if="row.supplier_name">{{ row.supplier_name }}</span>
-        <span v-else class="text-muted">-</span>
-      </template>
-
-      <!-- 发现日期 -->
-      <template #occurred_date="{ row }">
-        <span v-if="row.occurred_date">{{ row.occurred_date }}</span>
-        <span v-else class="text-muted">-</span>
-      </template>
-
-      <!-- 闭环日期 -->
-      <template #closed_date="{ row }">
-        <span v-if="row.closed_date" class="closed-date">{{ row.closed_date }}</span>
-        <span v-else class="text-muted">跟进中</span>
       </template>
 
       <!-- 操作列 -->
@@ -163,7 +126,7 @@ import { Search, Refresh, Plus, Edit, Delete } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import axios from 'axios'
 import DataTable from '@/components/common/DataTable/index.vue'
-import type { TableColumn } from '@/components/common/DataTable/types'
+import type { TableColumn, CellChangeEvent } from '@/components/common/DataTable/types'
 import QualityIssueForm from './QualityIssueForm.vue'
 
 interface QualityIssueRow {
@@ -196,21 +159,55 @@ const filters = reactive({
   status: 'ALL'
 })
 
+const getStoredPageSize = (storageKey: string, fallback = 10) => {
+  try {
+    const v = localStorage.getItem(`${storageKey}_pagesize`)
+    return v ? Number(v) || fallback : fallback
+  } catch {
+    return fallback
+  }
+}
+
 const pagination = reactive({
   page: 1,
-  pageSize: 10,
+  pageSize: getStoredPageSize('quality_issue_list', 10),
   total: 0
 })
 
 const columns: TableColumn[] = [
-  { prop: 'issue_no', label: '问题单号', width: 160, fixed: 'left', sortable: true },
-  { prop: 'title', label: '质量问题主题简述', minWidth: 220, sortable: true },
+  {
+    prop: 'issue_no',
+    label: '问题单号',
+    width: 160,
+    fixed: 'left',
+    sortable: true,
+    dataType: 'code',
+    editable: true,
+    editType: 'input'
+  },
+  {
+    prop: 'title',
+    label: '质量问题主题简述',
+    minWidth: 220,
+    sortable: true,
+    editable: true,
+    editType: 'input'
+  },
   {
     prop: 'severity',
     label: '严重等级',
-    width: 100,
+    width: 110,
     align: 'center',
     sortable: true,
+    editable: true,
+    editType: 'select',
+    options: ['致命', '严重', '一般', '微小'],
+    colorMap: {
+      致命: 'danger',
+      严重: 'warning',
+      一般: 'primary',
+      微小: 'info'
+    },
     filters: [
       { text: '致命', value: '致命' },
       { text: '严重', value: '严重' },
@@ -221,9 +218,18 @@ const columns: TableColumn[] = [
   {
     prop: 'status',
     label: '闭环状态',
-    width: 110,
+    width: 120,
     align: 'center',
     sortable: true,
+    editable: true,
+    editType: 'select',
+    options: ['登记', '已提改善', '已验证', '闭环'],
+    colorMap: {
+      闭环: 'success',
+      已验证: 'primary',
+      已提改善: 'warning',
+      登记: 'danger'
+    },
     filters: [
       { text: '登记', value: '登记' },
       { text: '已提改善', value: '已提改善' },
@@ -231,38 +237,51 @@ const columns: TableColumn[] = [
       { text: '闭环', value: '闭环' }
     ]
   },
-  { prop: 'part', label: '关联零部件', minWidth: 180, slotName: 'part' },
-  { prop: 'supplier_name', label: '责任供应商', minWidth: 180, sortable: true },
-  { prop: 'responsible', label: '跟进人', width: 110, sortable: true },
-  { prop: 'occurred_date', label: '发现日期', width: 120, align: 'center', sortable: true },
-  { prop: 'closed_date', label: '闭环日期', width: 120, align: 'center', sortable: true }
+  {
+    prop: 'part',
+    label: '关联零部件',
+    minWidth: 180,
+    slotName: 'part',
+    quickAddDisabled: true
+  },
+  {
+    prop: 'supplier_name',
+    label: '责任供应商',
+    minWidth: 180,
+    sortable: true,
+    quickAddDisabled: true
+  },
+  {
+    prop: 'responsible',
+    label: '跟进人',
+    width: 120,
+    sortable: true,
+    editable: true,
+    editType: 'select',
+    allowCreate: true,
+    options: ['张工', '李工', '王工', '丁工', '叶工', '林工']
+  },
+  {
+    prop: 'occurred_date',
+    label: '发现日期',
+    width: 130,
+    align: 'center',
+    sortable: true,
+    dataType: 'date',
+    editable: true,
+    editType: 'date'
+  },
+  {
+    prop: 'closed_date',
+    label: '闭环日期',
+    width: 130,
+    align: 'center',
+    sortable: true,
+    dataType: 'date',
+    editable: true,
+    editType: 'date'
+  }
 ]
-
-const getSeverityTagType = (sev: string) => {
-  switch (sev) {
-    case '致命':
-      return 'danger'
-    case '严重':
-      return 'warning'
-    case '一般':
-      return 'primary'
-    default:
-      return 'info'
-  }
-}
-
-const getStatusTagType = (status: string) => {
-  switch (status) {
-    case '闭环':
-      return 'success'
-    case '已验证':
-      return 'primary'
-    case '已提改善':
-      return 'warning'
-    default:
-      return 'danger'
-  }
-}
 
 const fetchData = async () => {
   loading.value = true
@@ -324,6 +343,38 @@ const handleDelete = async (row: QualityIssueRow) => {
     fetchData()
   } catch (err: any) {
     ElMessage.error(`删除失败: ${err.response?.data?.detail || err.message}`)
+  }
+}
+
+const handleCellChange = async (event: CellChangeEvent) => {
+  try {
+    await axios.put(`/api/sqm/issues/${event.row.id}`, {
+      [event.prop]: event.value
+    })
+    ElMessage.success({
+      message: `已自动更新 [${event.prop}]`,
+      duration: 1500
+    })
+  } catch (err: any) {
+    ElMessage.error(`更新失败: ${err.response?.data?.detail || err.message}`)
+    fetchData()
+  }
+}
+
+const handleQuickAdd = async (payload: Record<string, any>, done: () => void) => {
+  if (payload.title && payload.title.trim()) {
+    try {
+      await axios.post('/api/sqm/issues', payload)
+      ElMessage.success('质量问题单创建成功')
+      done()
+      fetchData()
+    } catch (err: any) {
+      ElMessage.error(`快速创建失败: ${err.response?.data?.detail || err.message}`)
+    }
+  } else {
+    ElMessage.info('正在开启详细登记抽屉以输入完整问题简述...')
+    qualityIssueFormRef.value?.openCreate(payload)
+    done()
   }
 }
 

@@ -9,10 +9,14 @@
       import-key="project"
       import-title="新产品项目"
       unique-key="project_code"
+      allow-quick-add
+      quick-add-placeholder="快速登记新产品项目..."
+      :quick-add-defaults="{ status: '开发中' }"
       @refresh="fetchData"
       @page-change="handlePageChange"
       @size-change="handleSizeChange"
       @cell-change="handleCellChange"
+      @quick-add="handleQuickAdd"
     >
       <!-- 顶部检索插槽 -->
       <template #search>
@@ -56,33 +60,6 @@
         <el-button type="primary" size="small" :icon="Plus" @click="handleCreate">
           新建项目
         </el-button>
-      </template>
-
-      <!-- 项目唯一代号 -->
-      <template #project_code="{ row }">
-        <span class="project-badge">{{ row.project_code }}</span>
-      </template>
-
-      <!-- 项目名称 -->
-      <template #name="{ row }">
-        <strong>{{ row.name }}</strong>
-      </template>
-
-      <!-- 所属平台 -->
-      <template #platform="{ row }">
-        <el-tag v-if="row.platform" size="small" type="info" effect="light">
-          {{ row.platform }}
-        </el-tag>
-        <span v-else class="text-muted">-</span>
-      </template>
-
-      <!-- SOP 日期 -->
-      <template #sop_date="{ row }">
-        <div v-if="row.sop_date" class="sop-cell">
-          <el-icon class="sop-icon"><Calendar /></el-icon>
-          <span>{{ row.sop_date }}</span>
-        </div>
-        <span v-else class="text-muted">待排期</span>
       </template>
 
 
@@ -169,10 +146,28 @@ const pagination = reactive({
 })
 
 const columns: TableColumn[] = [
-  { prop: 'project_code', label: '项目唯一代号', width: 160, fixed: 'left', sortable: true },
-  { prop: 'name', label: '项目名称', minWidth: 200, sortable: true, editable: true },
-  { prop: 'platform', label: '所属平台/车型', width: 160, sortable: true, editable: true },
-  { prop: 'sop_date', label: '量产节点 (SOP)', width: 150, align: 'center', sortable: true, editable: true },
+  {
+    prop: 'project_code',
+    label: '项目唯一代号',
+    width: 160,
+    fixed: 'left',
+    sortable: true,
+    dataType: 'code',
+    editable: true,
+    editType: 'input'
+  },
+  { prop: 'name', label: '项目名称', minWidth: 200, sortable: true, editable: true, editType: 'input' },
+  { prop: 'platform', label: '所属平台/车型', width: 160, sortable: true, editable: true, editType: 'input' },
+  {
+    prop: 'sop_date',
+    label: '量产节点 (SOP)',
+    width: 150,
+    align: 'center',
+    sortable: true,
+    dataType: 'date',
+    editable: true,
+    editType: 'date'
+  },
   {
     prop: 'status',
     label: '项目状态',
@@ -188,7 +183,7 @@ const columns: TableColumn[] = [
       { label: '结束', value: '结束', color: 'danger' }
     ]
   },
-  { prop: 'remark', label: '项目备忘说明', minWidth: 180, editable: true },
+  { prop: 'remark', label: '项目备忘说明', minWidth: 180, editable: true, editType: 'input' },
   { prop: 'created_at', label: '创建时间', width: 140, sortable: true, dataType: 'datetime' }
 ]
 
@@ -280,6 +275,23 @@ const handleDelete = async (row: ProjectRow) => {
     fetchData()
   } catch (err: any) {
     ElMessage.error(`删除失败: ${err.response?.data?.detail || err.message}`)
+  }
+}
+
+const handleQuickAdd = async (payload: Record<string, any>, done: () => void) => {
+  if (payload.project_code && payload.name) {
+    try {
+      await axios.post('/api/maindata/projects', payload)
+      ElMessage.success('新项目创建成功')
+      done()
+      fetchData()
+    } catch (err: any) {
+      ElMessage.error(`快速创建失败: ${err.response?.data?.detail || err.message}`)
+    }
+  } else {
+    ElMessage.info('正在开启详细创建抽屉以完善项目信息...')
+    projectFormRef.value?.openCreate(payload)
+    done()
   }
 }
 

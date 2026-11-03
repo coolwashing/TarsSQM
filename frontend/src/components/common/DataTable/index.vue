@@ -480,16 +480,35 @@
                   </div>
                 </template>
 
-                <!-- 3. 普通非编辑列展示态 (支持日期时间0.5s悬浮与格式化) -->
+                <!-- 3. 普通非编辑列展示态 (支持代码徽标、彩色状态标签与日期0.5s悬浮) -->
                 <template v-else>
+                  <!-- A. 代码/图号徽标 (dataType === 'code') -->
+                  <span v-if="col.dataType === 'code'" class="feishu-code-badge">
+                    {{ scope.row[col.prop] || '-' }}
+                  </span>
+
+                  <!-- B. 声明了 options 或 colorMap 的状态胶囊 -->
+                  <el-tag
+                    v-else-if="col.options || col.editOptions || col.colorMap"
+                    :type="getTagColor(scope.row[col.prop], col)"
+                    size="small"
+                    effect="light"
+                    class="feishu-status-tag"
+                  >
+                    {{ getOptionLabelForDisplay(scope.row[col.prop], col) }}
+                  </el-tag>
+
+                  <!-- C. 日期时间展示 (isDateColumn) -->
                   <el-tooltip
-                    v-if="isDateColumn(col) && hasValidDate(scope.row[col.prop])"
+                    v-else-if="isDateColumn(col) && hasValidDate(scope.row[col.prop])"
                     :content="`完整时间: ${formatFullDateTime(scope.row[col.prop])}`"
                     placement="top"
                     :show-after="500"
                   >
                     <span class="cell-plain-text date-cell-text">{{ formatCellValue(scope.row, col) }}</span>
                   </el-tooltip>
+
+                  <!-- D. 默认纯文本展示 -->
                   <span v-else class="cell-plain-text">{{ formatCellValue(scope.row, col) }}</span>
                 </template>
               </template>
@@ -516,9 +535,126 @@
             </slot>
           </template>
 
-          <!-- 表格底部追加行插槽 (如飞书多维表格行底快速加行) -->
-          <template v-if="$slots.append" #append>
-            <slot name="append" />
+          <!-- 表格底部追加行插槽 (支持外部插槽或开箱即用的通用飞书多维表格行底极速连续加行引擎) -->
+          <template v-if="$slots.append || allowQuickAdd" #append>
+            <slot v-if="$slots.append" name="append" />
+
+            <!-- 通用飞书多维表格行底极速连续加行条带 -->
+            <div v-else-if="allowQuickAdd" class="feishu-table-append-zone">
+              <!-- 未激活态：飞书多维表格经典底栏 "+ 添加新记录" -->
+              <div
+                v-if="!isQuickAddingRow"
+                class="feishu-add-row-placeholder"
+                tabindex="0"
+                @click="startQuickAdd"
+                @keydown.enter="startQuickAdd"
+              >
+                <div class="add-btn-inner">
+                  <el-icon class="add-icon"><Plus /></el-icon>
+                  <span class="add-title">{{ quickAddPlaceholder || '添加新记录' }}</span>
+                  <span class="add-tip">点击或按回车开启行内录入，支持连续记账</span>
+                </div>
+              </div>
+
+              <!-- 激活态：行内直接录入行 -->
+              <div
+                v-else
+                class="feishu-inline-editor-row"
+                @keyup.esc="cancelQuickAdd"
+              >
+                <!-- 序号列 / 标识 -->
+                <div v-if="showIndex" class="inline-cell inline-cell-index">
+                  <span class="new-row-badge">+ 新行</span>
+                </div>
+
+                <!-- 遍历各个可见列进行对齐输入控件渲染 -->
+                <div
+                  v-for="(col, colIdx) in quickAddVisibleColumns"
+                  :key="col.prop"
+                  class="inline-cell"
+                  :class="`cell-${col.prop}`"
+                  :style="getQuickAddCellStyle(col)"
+                >
+                  <!-- A. 下拉选择 (editType === 'select') -->
+                  <el-select
+                    v-if="col.editType === 'select'"
+                    v-model="quickAddDraft[col.prop]"
+                    :placeholder="col.label"
+                    size="small"
+                    class="inline-select"
+                    clearable
+                    filterable
+                    :allow-create="col.allowCreate"
+                    default-first-option
+                  >
+                    <el-option
+                      v-for="opt in getColumnOptions(col)"
+                      :key="opt.value"
+                      :label="opt.label"
+                      :value="opt.value"
+                    />
+                  </el-select>
+
+                  <!-- B. 日期选择 (editType === 'date' || dataType === 'date') -->
+                  <el-date-picker
+                    v-else-if="col.editType === 'date' || col.dataType === 'date' || col.prop.endsWith('_date')"
+                    v-model="quickAddDraft[col.prop]"
+                    type="date"
+                    value-format="YYYY-MM-DD"
+                    :placeholder="col.label"
+                    size="small"
+                    class="inline-date-picker"
+                  />
+
+                  <!-- C. 数字输入 (editType === 'number') -->
+                  <el-input-number
+                    v-else-if="col.editType === 'number'"
+                    v-model="quickAddDraft[col.prop]"
+                    :placeholder="col.label"
+                    size="small"
+                    controls-position="right"
+                    class="inline-number"
+                    @keyup.enter="submitQuickAdd"
+                  />
+
+                  <!-- D. 默认文本输入框 (首个可编辑输入框带 Enter ↵ 徽标) -->
+                  <el-input
+                    v-else
+                    :ref="(el: any) => setQuickAddInputRef(el, colIdx)"
+                    v-model="quickAddDraft[col.prop]"
+                    :placeholder="col.label"
+                    size="small"
+                    clearable
+                    class="inline-input"
+                    @keyup.enter="submitQuickAdd"
+                  >
+                    <template v-if="colIdx === primaryQuickAddColIndex" #suffix>
+                      <span class="enter-badge" title="回车即刻自动创建并就绪下一行">Enter ↵</span>
+                    </template>
+                  </el-input>
+                </div>
+
+                <!-- 操作按钮区 -->
+                <div class="inline-cell cell-actions">
+                  <el-button
+                    type="primary"
+                    size="small"
+                    :loading="quickAddingSubmitting"
+                    class="save-btn"
+                    @click="submitQuickAdd"
+                  >
+                    保存 ↵
+                  </el-button>
+                  <el-button
+                    size="small"
+                    class="cancel-btn"
+                    @click="cancelQuickAdd"
+                  >
+                    收起
+                  </el-button>
+                </div>
+              </div>
+            </div>
           </template>
         </el-table>
       </div>
@@ -601,6 +737,9 @@ const props = withDefaults(
     uniqueKey?: string
     showSelection?: boolean
     showIndex?: boolean
+    allowQuickAdd?: boolean
+    quickAddPlaceholder?: string
+    quickAddDefaults?: Record<string, any>
   }>(),
   {
     loading: false,
@@ -612,7 +751,9 @@ const props = withDefaults(
     importTitle: '',
     uniqueKey: '',
     showSelection: true,
-    showIndex: true
+    showIndex: true,
+    allowQuickAdd: false,
+    quickAddPlaceholder: '添加新记录'
   }
 )
 
@@ -624,10 +765,99 @@ const emit = defineEmits<{
   (e: 'cell-change', payload: CellChangeEvent): void
   (e: 'batch-cell-change', payload: BatchCellChangeEvent): void
   (e: 'selection-change', selection: any[]): void
+  (e: 'quick-add', payload: Record<string, any>, done: () => void): void
 }>()
 
 const tableRef = ref<any>(null)
 const cellInputRef = ref<any>(null)
+
+// ========================================================
+// 飞书多维表格风格：通用行底极速连续加行引擎 (Quick Add Row)
+// ========================================================
+const isQuickAddingRow = ref(false)
+const quickAddDraft = ref<Record<string, any>>({})
+const quickAddingSubmitting = ref(false)
+const quickAddInputsRef = ref<Record<number, any>>({})
+
+const setQuickAddInputRef = (el: any, colIdx: number) => {
+  if (el) {
+    quickAddInputsRef.value[colIdx] = el
+  }
+}
+
+const quickAddVisibleColumns = computed(() => {
+  return visibleColumns.value.filter(c => c.prop && c.prop !== 'id' && c.prop !== 'actions' && !c.quickAddDisabled)
+})
+
+const primaryQuickAddColIndex = computed(() => {
+  const idx = quickAddVisibleColumns.value.findIndex(c =>
+    !c.editType || c.editType === 'input' || c.prop === 'title' || c.prop === 'name' || c.prop.endsWith('_no') || c.prop === 'code'
+  )
+  return idx !== -1 ? idx : 0
+})
+
+const getQuickAddCellStyle = (col: TableColumn) => {
+  const w = col.width ? (typeof col.width === 'number' ? `${col.width}px` : col.width) : undefined
+  const mw = col.minWidth ? (typeof col.minWidth === 'number' ? `${col.minWidth}px` : col.minWidth) : '120px'
+  if (col.width) {
+    return { width: w, flexShrink: 0 }
+  }
+  return { minWidth: mw, flex: 1 }
+}
+
+const startQuickAdd = () => {
+  const initial: Record<string, any> = { ...(props.quickAddDefaults || {}) }
+  quickAddVisibleColumns.value.forEach(col => {
+    if (initial[col.prop] === undefined) {
+      if (col.editType === 'select') {
+        const opts = getColumnOptions(col)
+        initial[col.prop] = opts[0]?.value ?? ''
+      } else {
+        initial[col.prop] = ''
+      }
+    }
+  })
+  quickAddDraft.value = initial
+  isQuickAddingRow.value = true
+  nextTick(() => {
+    const primaryInput = quickAddInputsRef.value[primaryQuickAddColIndex.value]
+    primaryInput?.focus?.()
+  })
+}
+
+const cancelQuickAdd = () => {
+  isQuickAddingRow.value = false
+  quickAddDraft.value = {}
+}
+
+const submitQuickAdd = async (e?: KeyboardEvent) => {
+  if (e && (e.isComposing || (e as any).keyCode === 229)) return
+  if (quickAddingSubmitting.value) return
+
+  const draft = { ...quickAddDraft.value }
+  const primaryCol = quickAddVisibleColumns.value[primaryQuickAddColIndex.value]
+  const primaryVal = draft[primaryCol?.prop]
+  if (primaryCol && (!primaryVal || String(primaryVal).trim() === '')) {
+    ElMessage.warning(`请输入${primaryCol.label}`)
+    quickAddInputsRef.value[primaryQuickAddColIndex.value]?.focus?.()
+    return
+  }
+
+  quickAddingSubmitting.value = true
+  const done = () => {
+    quickAddingSubmitting.value = false
+    // 成功后清空首字段并自动就绪下一行，实现飞书式极速连续记账
+    if (primaryCol) {
+      quickAddDraft.value[primaryCol.prop] = ''
+    }
+    isQuickAddingRow.value = true
+    nextTick(() => {
+      quickAddInputsRef.value[primaryQuickAddColIndex.value]?.focus?.()
+    })
+  }
+
+  emit('quick-add', draft, done)
+}
 
 // 序号列计算跨页索引
 const calcRowIndex = (index: number) => {
@@ -983,18 +1213,23 @@ const getPopoverSearch = (prop: string) => {
 }
 
 // 标签色彩推导
-const getTagColor = (val: any, col: TableColumn): any => {
+const getTagColor = (val: any, col?: TableColumn): any => {
   if (val === null || val === undefined || val === '') return 'info'
   const str = String(val).trim()
-  if (col.colorMap && col.colorMap[str]) {
+  if (col && col.colorMap && col.colorMap[str]) {
     return col.colorMap[str]
   }
   // 工业业务关键词语义映射
-  if (['合格', '1供', '高', '已闭环', 'DONE', '通过', '有效', 'A'].includes(str)) return 'success'
-  if (['考察', '2供开发中', '中', '进行中', 'IN_PROGRESS', '警告', 'B'].includes(str)) return 'warning'
-  if (['冻结', '紧急', 'URGENT', '不合格', '已阻塞', 'BLOCKED', '失效', 'C'].includes(str)) return 'danger'
-  if (['潜在', '在开发', '低', '待办', 'TODO', '待排期', 'D'].includes(str)) return 'info'
+  if (['合格', '1供', '高', '已闭环', 'DONE', '通过', '有效', 'A', '已批准', 'PPAP', '量产', 'KPC'].includes(str)) return 'success'
+  if (['考察', '2供开发中', '中', '进行中', 'IN_PROGRESS', '警告', 'B', '待评审', '工装样件', '严重', '重要', '重点关注', 'HIGH', '开发中', 'KCC'].includes(str)) return 'warning'
+  if (['冻结', '紧急', 'URGENT', '不合格', '已阻塞', 'BLOCKED', '失效', 'C', '致命', '已冻结', '结束', 'CTQ红线'].includes(str)) return 'danger'
+  if (['潜在', '在开发', '低', '待办', 'TODO', '待排期', 'D', '登记', 'OTS', '微小', '立项', 'LOW', '已提改善', '已验证'].includes(str)) return 'info'
   return 'primary'
+}
+
+const getOptionLabelForDisplay = (val: any, col: TableColumn): string => {
+  if (val === null || val === undefined || val === '') return '-'
+  return getOptionLabel(val, col)
 }
 
 // 选项规范化
@@ -1227,6 +1462,14 @@ const focusPrevCol = (rowIdx: number, currentProp: string) => {
   }
 }
 
+const focusPrevRow = (rowIdx: number, prop: string) => {
+  if (rowIdx > 0) {
+    const prevRow = props.data[rowIdx - 1]
+    const col = visibleColumns.value.find(c => c.prop === prop)
+    if (prevRow && col) focusCell(prevRow, col)
+  }
+}
+
 const focusNextRow = (rowIdx: number, prop: string) => {
   if (rowIdx < props.data.length - 1) {
     const nextRow = props.data[rowIdx + 1]
@@ -1236,6 +1479,7 @@ const focusNextRow = (rowIdx: number, prop: string) => {
 }
 
 const handleCellKeydown = (e: KeyboardEvent, row: any, col: TableColumn, rowIdx: number) => {
+  if (e.isComposing || (e as any).keyCode === 229) return // 输入法拼音合成保护
   if (e.key === 'Tab') {
     e.preventDefault()
     if (isCellEditing(row, col.prop)) {
@@ -1256,6 +1500,21 @@ const handleCellKeydown = (e: KeyboardEvent, row: any, col: TableColumn, rowIdx:
   } else if (e.key === 'Escape') {
     if (isCellEditing(row, col.prop)) {
       editingCell.value = null
+    }
+  } else if (!isCellEditing(row, col.prop)) {
+    // 聚焦态下的飞书四向方向键漫游
+    if (e.key === 'ArrowDown') {
+      e.preventDefault()
+      focusNextRow(rowIdx, col.prop)
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault()
+      focusPrevRow(rowIdx, col.prop)
+    } else if (e.key === 'ArrowRight') {
+      e.preventDefault()
+      focusNextCol(rowIdx, col.prop)
+    } else if (e.key === 'ArrowLeft') {
+      e.preventDefault()
+      focusPrevCol(rowIdx, col.prop)
     }
   }
 }
@@ -1479,6 +1738,23 @@ onMounted(() => {
   initPageSize()
   window.addEventListener('keydown', handleTableUndoRedoKeydown)
   window.addEventListener('click', handleGlobalClick, true)
+})
+
+const openAiImport = () => {
+  aiImportDialogVisible.value = true
+}
+
+const openImport = () => {
+  importDialogVisible.value = true
+}
+
+defineExpose({
+  openAiImport,
+  openImport,
+  downloadTemplate: handleDownloadTemplate,
+  tableRef,
+  undo,
+  redo
 })
 </script>
 
@@ -1842,6 +2118,142 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 6px;
+}
+
+/* ========================================================
+   飞书多维表格风格：表格底部通用行内极速录入区 (allowQuickAdd)
+   ======================================================== */
+.feishu-table-append-zone {
+  width: 100%;
+  border-top: 1px solid var(--el-border-color-lighter, #ebeef5);
+  background: #ffffff;
+}
+
+.feishu-add-row-placeholder {
+  display: flex;
+  align-items: center;
+  height: 40px;
+  padding: 0 16px;
+  cursor: pointer;
+  user-select: none;
+  color: #64748b;
+  font-size: 13px;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  outline: none;
+}
+
+.feishu-add-row-placeholder:hover,
+.feishu-add-row-placeholder:focus-visible {
+  background: #f0f7ff;
+  color: #2563eb;
+}
+
+.feishu-add-row-placeholder .add-btn-inner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.feishu-add-row-placeholder .add-icon {
+  font-size: 14px;
+  font-weight: 700;
+  transition: transform 0.2s ease;
+}
+
+.feishu-add-row-placeholder:hover .add-icon {
+  transform: rotate(90deg) scale(1.1);
+}
+
+.feishu-add-row-placeholder .add-title {
+  font-weight: 500;
+}
+
+.feishu-add-row-placeholder .add-tip {
+  font-size: 12px;
+  color: #94a3b8;
+  margin-left: 8px;
+}
+
+/* 激活态：行内直接录入行 */
+.feishu-inline-editor-row {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 6px 12px;
+  gap: 8px;
+  background: #f8fafc;
+  border-left: 3px solid #2563eb;
+  animation: feishuFadeIn 0.18s cubic-bezier(0, 0, 0.2, 1);
+  overflow-x: auto;
+}
+
+@keyframes feishuFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.feishu-inline-editor-row .inline-cell {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.feishu-inline-editor-row .inline-cell-index {
+  width: 50px;
+  justify-content: center;
+}
+
+.new-row-badge {
+  font-size: 11px;
+  font-weight: 700;
+  color: #2563eb;
+  background: #eff6ff;
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: 1px dashed #bfdbfe;
+  white-space: nowrap;
+}
+
+.feishu-inline-editor-row .enter-badge {
+  font-size: 10px;
+  color: #2563eb;
+  background: #eff6ff;
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-weight: 600;
+  border: 1px solid #bfdbfe;
+  cursor: pointer;
+}
+
+.feishu-inline-editor-row .cell-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.feishu-code-badge {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  background: #f1f5f9;
+  color: #0f172a;
+  padding: 2px 7px;
+  border-radius: 4px;
+  font-size: 12px;
+  border: 1px solid #e2e8f0;
+  font-weight: 600;
+  display: inline-block;
+  white-space: nowrap;
+}
+
+.feishu-status-tag {
+  font-weight: 500;
 }
 </style>
 

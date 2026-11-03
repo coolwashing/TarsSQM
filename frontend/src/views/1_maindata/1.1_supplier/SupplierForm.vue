@@ -625,8 +625,11 @@ const resetForm = () => {
 }
 
 // 打开新建抽屉
-const openCreate = () => {
+const openCreate = (initialData?: Partial<SupplierModel>) => {
   resetForm()
+  if (initialData) {
+    Object.assign(form, initialData)
+  }
   activeTab.value = 'basic'
   loadOptions()
   visible.value = true

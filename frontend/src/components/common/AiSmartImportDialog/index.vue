@@ -464,7 +464,10 @@ const detectedUniqueKey = computed(() => {
 const generatedFullPrompt = computed(() => {
   const fieldsDesc = displayColumns.value.map(c => {
     let line = `  - ${c.label} (字段标识: ${c.prop}): 字符串`
-    if (c.options && c.options.length > 0) {
+    if (c.dataType === 'date' || c.prop.endsWith('_date') || c.prop === 'due_date' || c.prop === 'sop_date') {
+      const currentYear = new Date().getFullYear()
+      line += `，标准日期格式: YYYY-MM-DD（若材料中仅有 11-3、11/5 等月日，请自动根据当前年份补全为形如 ${currentYear}-11-03）`
+    } else if (c.options && c.options.length > 0) {
       const optLabels = c.options.map(o => (typeof o === 'string' ? o : o.label))
       line += `，枚举限定值: [${optLabels.join(', ')}]`
     }
@@ -781,6 +784,21 @@ const normalizeParsedRows = (rawList: Array<Record<string, any>>) => {
       if (cleanRow.task_code && (!cleanRow.title || cleanRow.title === '-')) {
         cleanRow.title = cleanRow.task_code
       }
+      if ((cleanRow.schedule || cleanRow['计划截止日'] || cleanRow['截止']) && !cleanRow.due_date) {
+        cleanRow.due_date = cleanRow.due_date || cleanRow.schedule || cleanRow['计划截止日'] || cleanRow['截止']
+      }
+      // 自动自愈简写日期（如 11-3, 11/5, 11月6日）为标准 YYYY-MM-DD
+      if (cleanRow.due_date) {
+        const rawDate = String(cleanRow.due_date).trim()
+        const currentYear = new Date().getFullYear()
+        const m1 = rawDate.match(/^(\d{1,2})[-/.](\d{1,2})$/)
+        const m2 = rawDate.match(/^(\d{1,2})月(\d{1,2})日?$/)
+        if (m1) {
+          cleanRow.due_date = `${currentYear}-${m1[1].padStart(2, '0')}-${m1[2].padStart(2, '0')}`
+        } else if (m2) {
+          cleanRow.due_date = `${currentYear}-${m2[1].padStart(2, '0')}-${m2[2].padStart(2, '0')}`
+        }
+      }
     }
 
     cleanRow._is_duplicate = false
@@ -919,6 +937,21 @@ const handleCommit = async () => {
           if (!clean.name || clean.name === '-') clean.name = effName
           if (!clean.code || clean.code === '-') clean.code = effName
           if (!clean.short_name || clean.short_name === '-') clean.short_name = effName
+        }
+      } else if (props.bizKey === 'task') {
+        if ((clean.schedule || clean['计划截止日'] || clean['截止']) && !clean.due_date) {
+          clean.due_date = clean.due_date || clean.schedule || clean['计划截止日'] || clean['截止']
+        }
+        if (clean.due_date) {
+          const rawDate = String(clean.due_date).trim()
+          const currentYear = new Date().getFullYear()
+          const m1 = rawDate.match(/^(\d{1,2})[-/.](\d{1,2})$/)
+          const m2 = rawDate.match(/^(\d{1,2})月(\d{1,2})日?$/)
+          if (m1) {
+            clean.due_date = `${currentYear}-${m1[1].padStart(2, '0')}-${m1[2].padStart(2, '0')}`
+          } else if (m2) {
+            clean.due_date = `${currentYear}-${m2[1].padStart(2, '0')}-${m2[2].padStart(2, '0')}`
+          }
         }
       }
 

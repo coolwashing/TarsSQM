@@ -309,17 +309,22 @@ const resetForm = () => {
 }
 
 // 打开新建抽屉
-const openCreate = async () => {
+const openCreate = async (initialData?: Partial<IssueModel>) => {
   resetForm()
+  if (initialData) {
+    Object.assign(form, initialData)
+  }
   visible.value = true
   await loadBaseOptions()
 
   // 预取系统下一个问题单号
-  try {
-    const nextRes = await axios.get('/api/sqm/issues/next-no')
-    form.issue_no = nextRes.data.next_issue_no || ''
-  } catch (e) {
-    // 忽略异常，由后端自动生成
+  if (!form.issue_no) {
+    try {
+      const nextRes = await axios.get('/api/sqm/issues/next-no')
+      form.issue_no = nextRes.data.next_issue_no || ''
+    } catch (e) {
+      // 忽略异常，由后端自动生成
+    }
   }
 
   nextTick(() => {

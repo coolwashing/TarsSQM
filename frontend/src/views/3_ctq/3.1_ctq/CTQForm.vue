@@ -281,12 +281,14 @@ const resetForm = () => {
 }
 
 // 打开新建抽屉
-const openCreate = async (defaultPartId?: number) => {
+const openCreate = async (defaultPartOrData?: number | Partial<CtqModel>) => {
   resetForm()
   visible.value = true
   await loadPartOptions()
-  if (defaultPartId) {
-    form.part_id = defaultPartId
+  if (typeof defaultPartOrData === 'number') {
+    form.part_id = defaultPartOrData
+  } else if (defaultPartOrData && typeof defaultPartOrData === 'object') {
+    Object.assign(form, defaultPartOrData)
   }
   nextTick(() => {
     captureInitialState()

@@ -8,9 +8,13 @@
       storage-key="part_dev_list"
       import-key="part_dev"
       import-title="零件开发台账"
+      allow-quick-add
+      quick-add-placeholder="快速绑定新零件开发关系..."
       @refresh="fetchData"
       @page-change="handlePageChange"
       @size-change="handleSizeChange"
+      @cell-change="handleCellChange"
+      @quick-add="handleQuickAdd"
     >
       <!-- 顶部检索插槽 -->
       <template #search>
@@ -66,22 +70,12 @@
 
       <!-- 工具栏按钮 -->
       <template #toolbar>
-        <el-button type="primary" :icon="Plus" @click="handleCreate">
+        <el-button type="primary" size="small" :icon="Plus" @click="handleCreate">
           绑定零件开发
         </el-button>
       </template>
 
-      <!-- 零件图号 -->
-      <template #part_no="{ row }">
-        <span class="part-badge">{{ row.part_no }}</span>
-      </template>
-
-      <!-- 零件名称 -->
-      <template #part_name="{ row }">
-        <strong>{{ row.part_name }}</strong>
-      </template>
-
-      <!-- 供应商 -->
+      <!-- 供应商复合展示插槽 -->
       <template #supplier="{ row }">
         <div class="supplier-box">
           <span class="sup-code">{{ row.supplier_code }}</span>
@@ -89,40 +83,12 @@
         </div>
       </template>
 
-      <!-- 所属车型/项目 -->
+      <!-- 所属车型/项目复合展示插槽 -->
       <template #project="{ row }">
         <el-tag v-if="row.project_code" size="small" type="info" effect="plain">
           {{ row.project_code }} {{ row.project_name ? `(${row.project_name})` : '' }}
         </el-tag>
         <span v-else class="text-muted">-</span>
-      </template>
-
-      <!-- 试制阶段 -->
-      <template #dev_phase="{ row }">
-        <el-tag :type="getPhaseTagType(row.dev_phase)" effect="dark" class="phase-tag">
-          {{ row.dev_phase }}
-        </el-tag>
-      </template>
-
-      <!-- 审批状态 -->
-      <template #status="{ row }">
-        <el-tag :type="getStatusTagType(row.status)" effect="plain" class="status-tag">
-          {{ row.status }}
-        </el-tag>
-      </template>
-
-      <!-- 计划达成节点 -->
-      <template #target_date="{ row }">
-        <div v-if="row.target_date" class="date-cell">
-          <el-icon class="date-icon"><Calendar /></el-icon>
-          <span>{{ row.target_date }}</span>
-        </div>
-        <span v-else class="text-muted">-</span>
-      </template>
-
-      <!-- 送样数量 -->
-      <template #sample_qty="{ row }">
-        <span class="qty-badge">{{ row.sample_qty || 0 }} 件</span>
       </template>
 
       <!-- 操作列 -->
@@ -162,11 +128,11 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
-import { Search, Refresh, Plus, Edit, Delete, Calendar } from '@element-plus/icons-vue'
+import { Search, Refresh, Plus, Edit, Delete } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import axios from 'axios'
 import DataTable from '@/components/common/DataTable/index.vue'
-import type { TableColumn } from '@/components/common/DataTable/types'
+import type { TableColumn, CellChangeEvent } from '@/components/common/DataTable/types'
 import PartDevForm from './PartDevForm.vue'
 
 interface PartDevRow {
@@ -199,23 +165,35 @@ const filters = reactive({
   status: 'ALL'
 })
 
+const getStoredPageSize = (storageKey: string, fallback = 10) => {
+  try {
+    const v = localStorage.getItem(`${storageKey}_pagesize`)
+    return v ? Number(v) || fallback : fallback
+  } catch {
+    return fallback
+  }
+}
+
 const pagination = reactive({
   page: 1,
-  pageSize: 10,
+  pageSize: getStoredPageSize('part_dev_list', 10),
   total: 0
 })
 
 const columns: TableColumn[] = [
-  { prop: 'part_no', label: '零件图号/编码', width: 160, fixed: 'left', sortable: true },
+  { prop: 'part_no', label: '零件图号/编码', width: 160, fixed: 'left', sortable: true, dataType: 'code' },
   { prop: 'part_name', label: '零件中文名称', minWidth: 180, sortable: true },
   { prop: 'supplier', label: '承制供应商', minWidth: 200, slotName: 'supplier' },
   { prop: 'project', label: '所属车型/项目', minWidth: 160, slotName: 'project' },
   {
     prop: 'dev_phase',
     label: '试制阶段',
-    width: 110,
+    width: 120,
     align: 'center',
     sortable: true,
+    editable: true,
+    editType: 'select',
+    options: ['OTS', '工装样件', 'PPAP', 'SOP'],
     filters: [
       { text: 'OTS', value: 'OTS' },
       { text: '工装样件', value: '工装样件' },
@@ -226,9 +204,12 @@ const columns: TableColumn[] = [
   {
     prop: 'status',
     label: '审批状态',
-    width: 110,
+    width: 120,
     align: 'center',
     sortable: true,
+    editable: true,
+    editType: 'select',
+    options: ['进行中', '待评审', '已批准', '已冻结'],
     filters: [
       { text: '进行中', value: '进行中' },
       { text: '待评审', value: '待评审' },
@@ -236,41 +217,43 @@ const columns: TableColumn[] = [
       { text: '已冻结', value: '已冻结' }
     ]
   },
-  { prop: 'target_date', label: '计划达成节点', width: 140, align: 'center', sortable: true },
-  { prop: 'sample_qty', label: '送样数量', width: 100, align: 'center', sortable: true },
-  { prop: 'responsible', label: 'SQE责任人', width: 120, sortable: true },
-  { prop: 'remark', label: '阶段备忘与评审说明', minWidth: 180 }
+  {
+    prop: 'target_date',
+    label: '计划达成节点',
+    width: 140,
+    align: 'center',
+    sortable: true,
+    dataType: 'date',
+    editable: true,
+    editType: 'date'
+  },
+  {
+    prop: 'sample_qty',
+    label: '送样数量',
+    width: 110,
+    align: 'center',
+    sortable: true,
+    editable: true,
+    editType: 'number'
+  },
+  {
+    prop: 'responsible',
+    label: 'SQE责任人',
+    width: 130,
+    sortable: true,
+    editable: true,
+    editType: 'select',
+    allowCreate: true,
+    options: ['张工', '李工', '王工', '丁工', '叶工', '林工']
+  },
+  {
+    prop: 'remark',
+    label: '阶段备忘与评审说明',
+    minWidth: 180,
+    editable: true,
+    editType: 'input'
+  }
 ]
-
-const getPhaseTagType = (phase: string) => {
-  switch (phase) {
-    case 'OTS':
-      return 'primary'
-    case '工装样件':
-      return 'warning'
-    case 'PPAP':
-      return 'success'
-    case 'SOP':
-      return 'info'
-    default:
-      return 'info'
-  }
-}
-
-const getStatusTagType = (status: string) => {
-  switch (status) {
-    case '已批准':
-      return 'success'
-    case '进行中':
-      return 'primary'
-    case '待评审':
-      return 'warning'
-    case '已冻结':
-      return 'danger'
-    default:
-      return 'info'
-  }
-}
 
 const fetchData = async () => {
   loading.value = true
@@ -332,6 +315,42 @@ const handleDelete = async (row: PartDevRow) => {
     fetchData()
   } catch (err: any) {
     ElMessage.error(`删除失败: ${err.response?.data?.detail || err.message}`)
+  }
+}
+
+const handleCellChange = async (event: CellChangeEvent) => {
+  try {
+    let val = event.value
+    if (event.prop === 'sample_qty') {
+      val = val ? Number(val) : 0
+    }
+    await axios.put(`/api/sqm/part-devs/${event.row.id}`, {
+      [event.prop]: val
+    })
+    ElMessage.success({
+      message: `已自动更新 [${event.prop}]`,
+      duration: 1500
+    })
+  } catch (err: any) {
+    ElMessage.error(`单元格更新失败: ${err.response?.data?.detail || err.message}`)
+    fetchData()
+  }
+}
+
+const handleQuickAdd = async (payload: Record<string, any>, done: () => void) => {
+  if (payload.part_id && payload.supplier_id) {
+    try {
+      await axios.post('/api/sqm/part-devs', payload)
+      ElMessage.success('新零件开发关系绑定成功')
+      done()
+      fetchData()
+    } catch (err: any) {
+      ElMessage.error(`添加失败: ${err.response?.data?.detail || err.message}`)
+    }
+  } else {
+    ElMessage.info('正在开启详细绑定抽屉以选定零件与承制供应商...')
+    partDevFormRef.value?.openCreate(payload)
+    done()
   }
 }
 

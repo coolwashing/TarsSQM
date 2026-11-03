@@ -25,7 +25,7 @@ export interface TableColumn {
   autoFilter?: boolean // 智能自动表头筛选 (根据当前数据自动去重提取枚举)
   visible?: boolean
   slotName?: string
-  dataType?: 'text' | 'date' | 'datetime' | 'number' // 自动格式化数据类型
+  dataType?: 'text' | 'code' | 'badge' | 'date' | 'datetime' | 'number' // 自动格式化数据类型
 
   // ========== 飞书多维表格行内编辑拓展 ==========
   editable?: boolean // 是否支持单元格行内快编
@@ -36,6 +36,12 @@ export interface TableColumn {
   dictKey?: string // 关联动态字典标识（如 SUPPLIER_TIER）
   allowCreate?: boolean // 是否允许在下拉菜单中就地创建新选项（飞书多维表格精髓）
   colorMap?: Record<string, string> // 选项值与语义色彩映射
+  quickAddDisabled?: boolean // 在行底快速加行时该列是否禁用/只读
+}
+
+export interface QuickAddEvent {
+  row: Record<string, any>
+  done: () => void
 }
 
 export interface TablePagination {
