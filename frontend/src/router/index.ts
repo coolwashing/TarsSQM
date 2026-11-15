@@ -37,6 +37,12 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/views/2_sqm/2.2_quality_issue/QualityIssueList.vue'),
     meta: { title: '质量问题清单' }
   },
+  {
+    path: '/sqm/mrb',
+    name: 'MrbList',
+    component: () => import('@/views/2_sqm/2.3_mrb/MrbList.vue'),
+    meta: { title: 'MRB 审理台账' }
+  },
   // CTQ 关键质量特性模块
   {
     path: '/ctq/list',

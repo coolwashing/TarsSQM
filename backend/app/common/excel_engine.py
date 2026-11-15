@@ -174,20 +174,28 @@ def validate_uploaded_file(biz_key: str, file_bytes: bytes, db: Session) -> Dict
     ws = wb.active
     fields: List[Dict[str, Any]] = config["fields"]
 
-    # 建立表头映射
+    # 建立表头映射 (优先精确匹配，避免子串串味)
     header_col_map: Dict[int, Dict[str, Any]] = {}
     row1_cells = [cell.value for cell in ws[1]]
+    assigned_props = set()
 
-    # 模糊归一化匹配
     for col_idx, raw_header in enumerate(row1_cells, start=1):
         norm_h = _normalize_header(raw_header)
         if not norm_h:
             continue
         for field in fields:
+            if field["prop"] in assigned_props:
+                continue
             f_norm_label = _normalize_header(field["label"])
             f_prop = field["prop"].lower()
-            if norm_h == f_norm_label or norm_h == f_prop or f_norm_label in norm_h:
+            aliases = [_normalize_header(a) for a in field.get("aliases", [])]
+            if (
+                norm_h == f_norm_label
+                or norm_h == f_prop
+                or norm_h in aliases
+            ):
                 header_col_map[col_idx] = field
+                assigned_props.add(field["prop"])
                 break
 
     # 检查是否有必填表头未识别到
@@ -281,11 +289,14 @@ def validate_uploaded_file(biz_key: str, file_bytes: bytes, db: Session) -> Dict
                 else:
                     tracker[str_val] = row_num
 
-                # 6. 数据库已有数据查重
+                # 6. 数据库已有数据查重 (若模块支持 allow_upsert 则标记为更新，不作为错误拦截)
                 model_cls = config["model"]
                 exists_in_db = db.query(model_cls).filter(getattr(model_cls, prop) == str_val).first()
                 if exists_in_db:
-                    row_errors.append(f"【{label}】[{str_val}] 在系统数据库中已存在，不可重复导入")
+                    if config.get("allow_upsert", False):
+                        clean_row_data["_is_update"] = True
+                    else:
+                        row_errors.append(f"【{label}】[{str_val}] 在系统数据库中已存在，不可重复导入")
 
             # 7. 外键关系自动解析
             fk_target = field.get("fk_target")
@@ -361,7 +372,7 @@ def validate_uploaded_file(biz_key: str, file_bytes: bytes, db: Session) -> Dict
 
 def commit_import_data(biz_key: str, valid_rows: List[Dict[str, Any]], db: Session) -> Dict[str, Any]:
     """
-    执行原子事务批量入库
+    执行原子事务批量入库与增量查重更新 (Upsert)
     """
     config = get_excel_config(biz_key)
     if not config:
@@ -369,8 +380,13 @@ def commit_import_data(biz_key: str, valid_rows: List[Dict[str, Any]], db: Sessi
 
     model_cls = config["model"]
     valid_col_names = {c.name for c in model_cls.__table__.columns}
+    unique_key = config.get("unique_key")
+    allow_upsert = config.get("allow_upsert", False)
 
     instances = []
+    imported_count = 0
+    updated_count = 0
+
     for item in valid_rows:
         clean_dict = item.get("clean_data", {})
         if not clean_dict:
@@ -378,15 +394,39 @@ def commit_import_data(biz_key: str, valid_rows: List[Dict[str, Any]], db: Sessi
 
         # 过滤仅属于该模型的有效字段
         filtered_payload = {k: v for k, v in clean_dict.items() if k in valid_col_names}
+
+        # 增量查重更新分支
+        if allow_upsert and unique_key and unique_key in filtered_payload:
+            uk_val = filtered_payload[unique_key]
+            existing = db.query(model_cls).filter(getattr(model_cls, unique_key) == uk_val).first()
+            if existing:
+                for k, v in filtered_payload.items():
+                    if k != unique_key and v is not None and v != "":
+                        setattr(existing, k, v)
+                updated_count += 1
+                continue
+
         instances.append(model_cls(**filtered_payload))
+        imported_count += 1
 
     try:
-        db.add_all(instances)
+        if instances:
+            db.add_all(instances)
         db.commit()
+
+        msg_parts = []
+        if imported_count > 0:
+            msg_parts.append(f"新增 {imported_count} 条")
+        if updated_count > 0:
+            msg_parts.append(f"覆盖更新 {updated_count} 条")
+        summary = "、".join(msg_parts) if msg_parts else "0 条"
+
         return {
             "success": True,
-            "imported_count": len(instances),
-            "message": f"成功批量导入 {len(instances)} 条【{config['title']}】数据"
+            "imported_count": imported_count,
+            "updated_count": updated_count,
+            "total_count": imported_count + updated_count,
+            "message": f"成功批量处理【{config['title']}】数据：{summary}"
         }
     except Exception as e:
         db.rollback()

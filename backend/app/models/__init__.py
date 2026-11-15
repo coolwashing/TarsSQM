@@ -1,6 +1,7 @@
 from app.models.attachment import SysAttachment
 from app.models.main_data import SqmSupplier, SqmProject, SqmPart
 from app.models.sqm_quality import SqmPartDev, SqmQualityIssue
+from app.models.sqm_mrb import SqmMrb
 from app.models.ctq import SqmCtq
 from app.models.kb import SqmKbDoc
 from app.models.task import SqmTask
@@ -13,6 +14,7 @@ __all__ = [
     "SqmPart",
     "SqmPartDev",
     "SqmQualityIssue",
+    "SqmMrb",
     "SqmCtq",
     "SqmKbDoc",
     "SqmTask",

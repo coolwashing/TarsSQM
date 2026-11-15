@@ -51,6 +51,10 @@
             <el-icon><WarningFilled /></el-icon>
             <span>质量问题清单</span>
           </el-menu-item>
+          <el-menu-item index="/sqm/mrb">
+            <el-icon><Tickets /></el-icon>
+            <span>MRB 审理台账</span>
+          </el-menu-item>
         </el-sub-menu>
 
         <!-- CTQ 关键质量特性 -->
@@ -129,6 +133,7 @@ import {
   Checked,
   TrendCharts,
   WarningFilled,
+  Tickets,
   Aim,
   List,
   Connection,

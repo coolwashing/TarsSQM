@@ -40,12 +40,13 @@ app.mount(
 )
 
 
-from app.routers import r_storage, r_maindata, r_sqm, r_ctq, r_excel, r_kb, r_kb_workspace, r_dev, r_task, r_smart_import, r_fmea
+from app.routers import r_storage, r_maindata, r_sqm, r_mrb, r_ctq, r_excel, r_kb, r_kb_workspace, r_dev, r_task, r_smart_import, r_fmea
 
 # 挂载业务功能路由
 app.include_router(r_storage.router)
 app.include_router(r_maindata.router)
 app.include_router(r_sqm.router)
+app.include_router(r_mrb.router)
 app.include_router(r_ctq.router)
 app.include_router(r_excel.router)
 app.include_router(r_kb.router)
