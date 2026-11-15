@@ -1,0 +1,12 @@
+{
+  "table_name": "sqm_fmea_board",
+  "title": "sqm_fmea_board 架构设计规范",
+  "business_module": "sqm_fmea",
+  "description": "FMEA 视觉风险画板与多级 BOM 拓扑骨架表",
+  "author": "系统架构师",
+  "version": "1.1.0",
+  "updated_at": "2026-11-08 10:25:00",
+  "html_content": "<h2>1. 业务定位与核心场景</h2>\n<p><strong>sqm_fmea_board</strong> 承载防错活地图的「系统分组 -> 模块画板」空间骨架，支持将底图热点、极简部件/工序节点、共用单元实例（<code>unit_code</code>）与子系统黑盒画板（<code>sub_board_id</code>）自由组合为多父级借用 BOM 图谱。</p>\n<h2>2. 关键字段说明</h2>\n<ul><li><code>board_code</code>：画板唯一编码（如 BRD-ACT-G2）</li><li><code>group_name</code>：系统或产线分组目录名称</li><li><code>canvas_data</code>：轻量空间拓扑 JSON（含 viewport、image_boards、nodes[支持 unit_code 与 sub_board_id]、edges）</li></ul>",
+  "markdown_content": "# sqm_fmea_board 架构设计规范\n\n承载 FMEA 视觉风险画板与多父级借用 BOM 空间骨架。\n"
+}
+

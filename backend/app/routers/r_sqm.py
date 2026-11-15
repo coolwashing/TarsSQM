@@ -273,6 +273,8 @@ def get_quality_issues(
         query = query.filter(
             or_(
                 SqmQualityIssue.issue_no.like(kw),
+                SqmQualityIssue.mrb_no.like(kw),
+                SqmQualityIssue.project_code.like(kw),
                 SqmQualityIssue.title.like(kw),
                 SqmQualityIssue.responsible.like(kw),
                 SqmPart.part_no.like(kw),
@@ -318,8 +320,11 @@ def get_quality_issues(
             part_no=p_no,
             part_name=p_name,
             supplier_code=s_code,
-            supplier_name=s_name,
-            attachments=[],
+            defect_qty=issue.defect_qty,
+            batch_qty=issue.batch_qty,
+            project_code=issue.project_code,
+            mrb_no=issue.mrb_no,
+            attachments=issue.attachments or [],
             created_at=issue.created_at,
             updated_at=issue.updated_at
         )
@@ -380,7 +385,11 @@ def get_quality_issue_detail(issue_id: int, db: Session = Depends(get_db)):
         part_name=p_name,
         supplier_code=s_code,
         supplier_name=s_name,
-        attachments=[
+        defect_qty=issue.defect_qty,
+        batch_qty=issue.batch_qty,
+        project_code=issue.project_code,
+        mrb_no=issue.mrb_no,
+        attachments=issue.attachments or [
             SysAttachmentOut(
                 id=att.id,
                 file_path=att.file_path,
@@ -421,6 +430,11 @@ def create_quality_issue(payload: QualityIssueCreate, db: Session = Depends(get_
         responsible=payload.responsible,
         occurred_date=payload.occurred_date or date.today(),
         closed_date=payload.closed_date,
+        defect_qty=payload.defect_qty if payload.defect_qty is not None else 1,
+        batch_qty=payload.batch_qty,
+        project_code=payload.project_code,
+        mrb_no=payload.mrb_no,
+        attachments=payload.attachments or [],
         remark=payload.remark
     )
     db.add(issue)

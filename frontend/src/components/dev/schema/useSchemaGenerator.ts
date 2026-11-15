@@ -105,47 +105,53 @@ export function inferField(col: ColumnMeta): InferredField {
 }
 
 /**
- * 生成 Element-Plus 数据展示表格代码
+ * 生成项目标准 DataTable 配置驱动表格代码（符合 ui-ux.md 与 data-table.md 规范）
  */
 export function generateTableCode(tableName: string, fields: InferredField[]): string {
-  const columnsCode = fields
+  const colDefs = fields
     .map(f => {
-      if (f.controlType === 'switch') {
-        return `    <el-table-column prop="${f.prop}" label="${f.label}" width="100" align="center">
-      <template #default="{ row }">
-        <el-tag :type="row.${f.prop} ? 'success' : 'info'" size="small">
-          {{ row.${f.prop} ? '是' : '否' }}
-        </el-tag>
-      </template>
-    </el-table-column>`
+      if (f.prop === 'id') {
+        return `  { prop: 'id', label: 'ID', width: 80, align: 'center', dataType: 'code' }`
       }
       if (f.controlType === 'select') {
-        return `    <el-table-column prop="${f.prop}" label="${f.label}" min-width="120" align="center">
-      <template #default="{ row }">
-        <el-tag size="small">{{ row.${f.prop} || '-' }}</el-tag>
-      </template>
-    </el-table-column>`
+        return `  { prop: '${f.prop}', label: '${f.label}', width: 120, align: 'center', sortable: true, editable: true, editType: 'select', options: ['选项A', '选项B'] }`
       }
       if (f.controlType === 'date-picker') {
-        return `    <el-table-column prop="${f.prop}" label="${f.label}" width="160" sortable align="center" />`
+        return `  { prop: '${f.prop}', label: '${f.label}', width: 140, align: 'center', sortable: true, dataType: 'date', editable: f.prop !== 'created_at' && f.prop !== 'updated_at', editType: 'date' }`.replace(
+          "f.prop !== 'created_at' && f.prop !== 'updated_at'",
+          String(f.prop !== 'created_at' && f.prop !== 'updated_at')
+        )
       }
       if (f.controlType === 'input-number') {
-        return `    <el-table-column prop="${f.prop}" label="${f.label}" width="120" sortable align="right" />`
+        return `  { prop: '${f.prop}', label: '${f.label}', width: 110, align: 'center', sortable: true, editable: true, editType: 'number' }`
       }
-      return `    <el-table-column prop="${f.prop}" label="${f.label}" min-width="140" show-overflow-tooltip />`
+      return `  { prop: '${f.prop}', label: '${f.label}', minWidth: 160, sortable: true, editable: true, editType: 'input' }`
     })
-    .join('\n')
+    .join(',\n')
 
-  return `<!-- ${tableName} 业务数据展示表格 -->
-<el-table :data="tableData" v-loading="loading" stripe border style="width: 100%">
-${columnsCode}
-    <el-table-column label="操作" width="140" fixed="right" align="center">
-      <template #default="{ row }">
-        <el-button link type="primary" size="small" @click="handleEdit(row)">编辑</el-button>
-        <el-button link type="danger" size="small" @click="handleDelete(row)">删除</el-button>
-      </template>
-    </el-table-column>
-</el-table>`
+  return `<!-- ${tableName} 标准高密度数据表格 -->
+<DataTable
+  :columns="columns"
+  :data="tableData"
+  :loading="loading"
+  :pagination="pagination"
+  storage-key="${tableName}_list"
+  show-actions
+  entity-label="${tableName}"
+  allow-quick-add
+  @refresh="fetchData"
+  @page-change="handlePageChange"
+  @size-change="handleSizeChange"
+  @cell-change="handleCellChange"
+  @quick-add="handleQuickAdd"
+  @edit="handleEdit"
+  @delete="handleDelete"
+/>
+
+// script 列定义配置 (TableColumn[])
+const columns: TableColumn[] = [
+${colDefs}
+]`
 }
 
 /**
@@ -255,19 +261,19 @@ export function generateFilterBarCode(fields: InferredField[]): string {
   const itemsCode = filterCandidates
     .map(f => {
       if (f.controlType === 'select') {
-        return `    <el-select v-model="filterParams.${f.prop}" placeholder="${f.label}" clearable size="default" style="width: 160px">
-      <el-option label="全部状态" value="" />
+        return `    <el-select v-model="filterParams.${f.prop}" placeholder="${f.label}" clearable size="small" style="width: 120px">
+      <el-option label="全部" value="ALL" />
     </el-select>`
       }
-      return `    <el-input v-model="filterParams.${f.prop}" placeholder="搜索${f.label}..." clearable size="default" style="width: 200px" />`
+      return `    <el-input v-model="filterParams.${f.prop}" placeholder="搜索${f.label}..." clearable size="small" style="width: 180px" />`
     })
     .join('\n')
 
   return `<!-- 顶部轻量搜索筛选栏 -->
 <div class="search-filter-bar">
 ${itemsCode}
-  <el-button type="primary" size="default" @click="handleSearch">查询</el-button>
-  <el-button size="default" @click="handleResetFilter">重置</el-button>
+  <el-button type="primary" size="small" @click="handleSearch">查询</el-button>
+  <el-button circle size="small" @click="handleResetFilter" title="重置检索条件" />
 </div>`
 }
 

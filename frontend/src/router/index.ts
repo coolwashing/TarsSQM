@@ -44,6 +44,13 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/views/3_ctq/3.1_ctq/CTQList.vue'),
     meta: { title: '关键特征清单' }
   },
+  // FMEA 视觉风险画板与经验库
+  {
+    path: '/fmea/workspace',
+    name: 'FmeaWorkspace',
+    component: () => import('@/views/6_fmea/FmeaWorkspace.vue'),
+    meta: { title: 'FMEA 风险画板' }
+  },
   // 质量知识库模块
   {
     path: '/kb/docs',

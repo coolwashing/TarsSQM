@@ -4,6 +4,7 @@ from app.models.sqm_quality import SqmPartDev, SqmQualityIssue
 from app.models.ctq import SqmCtq
 from app.models.kb import SqmKbDoc
 from app.models.task import SqmTask
+from app.models.fmea import SqmFmeaBoard, SqmFmeaItem
 
 __all__ = [
     "SysAttachment",
@@ -14,5 +15,7 @@ __all__ = [
     "SqmQualityIssue",
     "SqmCtq",
     "SqmKbDoc",
-    "SqmTask"
+    "SqmTask",
+    "SqmFmeaBoard",
+    "SqmFmeaItem"
 ]

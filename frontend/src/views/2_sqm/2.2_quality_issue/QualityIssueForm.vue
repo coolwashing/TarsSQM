@@ -57,6 +57,37 @@
       </el-row>
 
       <el-row :gutter="24">
+        <el-col :span="8">
+          <el-form-item label="不合格数量" prop="defect_qty">
+            <el-input-number
+              v-model="form.defect_qty"
+              :min="1"
+              controls-position="right"
+              style="width: 100%"
+            />
+          </el-form-item>
+        </el-col>
+        <el-col :span="8">
+          <el-form-item label="所属项目号" prop="project_code">
+            <el-input
+              v-model="form.project_code"
+              placeholder="如 AWR"
+              clearable
+            />
+          </el-form-item>
+        </el-col>
+        <el-col :span="8">
+          <el-form-item label="MRB流水号" prop="mrb_no">
+            <el-input
+              v-model="form.mrb_no"
+              placeholder="如 MRB20261104800"
+              clearable
+            />
+          </el-form-item>
+        </el-col>
+      </el-row>
+
+      <el-row :gutter="24">
         <el-col :span="12">
           <el-form-item label="关联零部件" prop="part_id">
             <el-select
@@ -213,6 +244,10 @@ interface IssueModel {
   responsible: string
   occurred_date: string | null
   closed_date: string | null
+  defect_qty?: number
+  project_code?: string
+  mrb_no?: string
+  attachments?: any[]
   remark: string
 }
 
@@ -243,6 +278,10 @@ const form = reactive<IssueModel>({
   responsible: '',
   occurred_date: new Date().toISOString().slice(0, 10),
   closed_date: null,
+  defect_qty: 1,
+  project_code: '',
+  mrb_no: '',
+  attachments: [],
   remark: ''
 })
 
@@ -301,6 +340,10 @@ const resetForm = () => {
   form.responsible = ''
   form.occurred_date = new Date().toISOString().slice(0, 10)
   form.closed_date = null
+  form.defect_qty = 1
+  form.project_code = ''
+  form.mrb_no = ''
+  form.attachments = []
   form.remark = ''
   attachmentList.value = []
   nextTick(() => {
@@ -354,6 +397,10 @@ const openEdit = async (issueId: number) => {
     form.responsible = data.responsible || ''
     form.occurred_date = data.occurred_date || null
     form.closed_date = data.closed_date || null
+    form.defect_qty = data.defect_qty ?? 1
+    form.project_code = data.project_code ?? ''
+    form.mrb_no = data.mrb_no ?? ''
+    form.attachments = data.attachments || []
     form.remark = data.remark || ''
 
     if (data.attachments && Array.isArray(data.attachments)) {
@@ -405,6 +452,9 @@ const handleSave = async () => {
           responsible: form.responsible,
           occurred_date: form.occurred_date || null,
           closed_date: form.closed_date || null,
+          defect_qty: form.defect_qty,
+          project_code: form.project_code,
+          mrb_no: form.mrb_no,
           remark: form.remark
         })
         ElMessage.success('质量问题记录更新成功')
@@ -421,6 +471,9 @@ const handleSave = async () => {
           responsible: form.responsible,
           occurred_date: form.occurred_date || null,
           closed_date: form.closed_date || null,
+          defect_qty: form.defect_qty,
+          project_code: form.project_code,
+          mrb_no: form.mrb_no,
           remark: form.remark
         })
         savedId = createRes.data.id

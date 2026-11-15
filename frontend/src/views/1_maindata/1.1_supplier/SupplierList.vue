@@ -9,6 +9,9 @@
       import-key="supplier"
       import-title="供应商主数据"
       unique-key="code"
+      show-actions
+      entity-label="供应商"
+      :row-label-key="(r: SupplierRow) => `${r.name} (${r.code})`"
       allow-quick-add
       quick-add-placeholder="快速添加新供应商..."
       :quick-add-defaults="{ status: '合格', supply_tier: '1供' }"
@@ -17,6 +20,8 @@
       @size-change="handleSizeChange"
       @cell-change="handleCellChange"
       @quick-add="handleQuickAdd"
+      @edit="handleEdit"
+      @delete="handleDelete"
     >
       <!-- 顶部检索插槽 -->
       <template #search>
@@ -123,26 +128,6 @@
         {{ formatDateTime(row.created_at) }}
       </template>
 
-      <!-- 操作列插槽 -->
-      <template #action="{ row }">
-        <el-button link type="primary" :icon="Edit" @click="handleEdit(row)">
-          编辑
-        </el-button>
-        <el-popconfirm
-          title="确认删除该供应商主数据？"
-          confirm-button-text="删除"
-          cancel-button-text="取消"
-          confirm-button-type="danger"
-          @confirm="handleDelete(row)"
-        >
-          <template #reference>
-            <el-button link type="danger" :icon="Delete">
-              删除
-            </el-button>
-          </template>
-        </el-popconfirm>
-      </template>
-
       <!-- 空状态插槽 -->
       <template #empty>
         <el-empty description="未检索到符合条件的供应商主数据">
@@ -160,11 +145,12 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
-import { Search, Refresh, Plus, Edit, Delete, Document } from '@element-plus/icons-vue'
+import { useRoute } from 'vue-router'
+import { Search, Refresh, Plus, Document } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import axios from 'axios'
 import DataTable from '@/components/common/DataTable/index.vue'
-import type { TableColumn, CellChangeEvent } from '@/components/common/DataTable/types'
+import { getStoredTablePageSize, type TableColumn, type CellChangeEvent } from '@/components/common/DataTable/types'
 import SupplierForm from './SupplierForm.vue'
 
 interface SupplierRow {
@@ -204,18 +190,9 @@ const filters = reactive({
   supply_tier: 'ALL'
 })
 
-const getStoredPageSize = () => {
-  const saved = localStorage.getItem('sqm_table_pagesize_supplier_list')
-  if (saved) {
-    const num = parseInt(saved, 10)
-    if (num && !isNaN(num)) return num
-  }
-  return 10
-}
-
 const pagination = reactive({
   page: 1,
-  pageSize: getStoredPageSize(),
+  pageSize: getStoredTablePageSize('supplier_list', 10),
   total: 0
 })
 
@@ -456,7 +433,12 @@ const fetchOptions = async () => {
   }
 }
 
+const route = useRoute()
+
 onMounted(() => {
+  if (typeof route.query.keyword === 'string' && route.query.keyword.trim()) {
+    filters.keyword = route.query.keyword.trim()
+  }
   fetchData()
   fetchOptions()
 })

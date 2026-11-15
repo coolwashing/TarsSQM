@@ -8,6 +8,9 @@
       storage-key="part_dev_list"
       import-key="part_dev"
       import-title="零件开发台账"
+      show-actions
+      entity-label="零件开发绑定关系"
+      :row-label-key="(r: PartDevRow) => `${r.part_name || r.part_no} - ${r.supplier_name || r.supplier_code}`"
       allow-quick-add
       quick-add-placeholder="快速绑定新零件开发关系..."
       @refresh="fetchData"
@@ -15,6 +18,8 @@
       @size-change="handleSizeChange"
       @cell-change="handleCellChange"
       @quick-add="handleQuickAdd"
+      @edit="handleEdit"
+      @delete="handleDelete"
     >
       <!-- 顶部检索插槽 -->
       <template #search>
@@ -91,26 +96,6 @@
         <span v-else class="text-muted">-</span>
       </template>
 
-      <!-- 操作列 -->
-      <template #action="{ row }">
-        <el-button link type="primary" :icon="Edit" @click="handleEdit(row)">
-          编辑
-        </el-button>
-        <el-popconfirm
-          title="确认解除该零件与供应商的开发绑定关系？"
-          confirm-button-text="解绑删除"
-          cancel-button-text="取消"
-          confirm-button-type="danger"
-          @confirm="handleDelete(row)"
-        >
-          <template #reference>
-            <el-button link type="danger" :icon="Delete">
-              删除
-            </el-button>
-          </template>
-        </el-popconfirm>
-      </template>
-
       <!-- 空状态 -->
       <template #empty>
         <el-empty description="未检索到符合条件的零件开发看板记录">
@@ -128,11 +113,11 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
-import { Search, Refresh, Plus, Edit, Delete } from '@element-plus/icons-vue'
+import { Search, Refresh, Plus } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import axios from 'axios'
 import DataTable from '@/components/common/DataTable/index.vue'
-import type { TableColumn, CellChangeEvent } from '@/components/common/DataTable/types'
+import { getStoredTablePageSize, type TableColumn, type CellChangeEvent } from '@/components/common/DataTable/types'
 import PartDevForm from './PartDevForm.vue'
 
 interface PartDevRow {
@@ -165,18 +150,9 @@ const filters = reactive({
   status: 'ALL'
 })
 
-const getStoredPageSize = (storageKey: string, fallback = 10) => {
-  try {
-    const v = localStorage.getItem(`${storageKey}_pagesize`)
-    return v ? Number(v) || fallback : fallback
-  } catch {
-    return fallback
-  }
-}
-
 const pagination = reactive({
   page: 1,
-  pageSize: getStoredPageSize('part_dev_list', 10),
+  pageSize: getStoredTablePageSize('part_dev_list', 10),
   total: 0
 })
 
@@ -327,13 +303,9 @@ const handleCellChange = async (event: CellChangeEvent) => {
     await axios.put(`/api/sqm/part-devs/${event.row.id}`, {
       [event.prop]: val
     })
-    ElMessage.success({
-      message: `已自动更新 [${event.prop}]`,
-      duration: 1500
-    })
   } catch (err: any) {
+    event.row[event.prop] = event.oldValue
     ElMessage.error(`单元格更新失败: ${err.response?.data?.detail || err.message}`)
-    fetchData()
   }
 }
 

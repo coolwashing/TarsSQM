@@ -65,7 +65,7 @@ const openSchemaScaffolder = () => {
   window.dispatchEvent(new CustomEvent('sqm:toggle-schema-scaffolder'))
 }
 
-const isFullBleedRoute = computed(() => route.path.startsWith('/kb'))
+const isFullBleedRoute = computed(() => route.path.startsWith('/kb') || route.path.startsWith('/fmea'))
 
 const currentTitle = computed(() => {
   const raw = (route.meta?.title as string) || '工作台'

@@ -9,6 +9,9 @@
       import-key="part"
       import-title="零件主数据"
       unique-key="part_no"
+      show-actions
+      entity-label="零部件"
+      :row-label-key="(r: PartRow) => `${r.name} (${r.part_no})`"
       allow-quick-add
       quick-add-placeholder="快速登记新零件物料..."
       :quick-add-defaults="{ category: '机械结构件', drawing_version: 'A.0' }"
@@ -17,6 +20,8 @@
       @size-change="handleSizeChange"
       @cell-change="handleCellChange"
       @quick-add="handleQuickAdd"
+      @edit="handleEdit"
+      @delete="handleDelete"
     >
       <!-- 顶部检索插槽 -->
       <template #search>
@@ -95,24 +100,26 @@
         <span v-else class="text-muted">未绑定</span>
       </template>
 
-      <!-- 操作列 -->
-      <template #action="{ row }">
-        <el-button link type="primary" :icon="Edit" @click="handleEdit(row)">
-          编辑
-        </el-button>
-        <el-popconfirm
-          title="确认删除该零件主数据？"
-          confirm-button-text="删除"
-          cancel-button-text="取消"
-          confirm-button-type="danger"
-          @confirm="handleDelete(row)"
+      <!-- FMEA 视觉风险经验软关联穿透插槽 -->
+      <template #fmea_risk="{ row }">
+        <el-button
+          v-if="fmeaCountMap[row.part_no]?.total > 0"
+          link
+          :type="fmeaCountMap[row.part_no]?.high > 0 ? 'danger' : 'primary'"
+          size="small"
+          @click.stop="jumpToPartFmea(row.part_no)"
         >
-          <template #reference>
-            <el-button link type="danger" :icon="Delete">
-              删除
-            </el-button>
-          </template>
-        </el-popconfirm>
+          {{ fmeaCountMap[row.part_no].total }} 项经验{{ fmeaCountMap[row.part_no].high > 0 ? ` (${fmeaCountMap[row.part_no].high}高危)` : '' }} ↗
+        </el-button>
+        <el-button
+          v-else
+          link
+          type="info"
+          size="small"
+          @click.stop="jumpToPartFmea(row.part_no)"
+        >
+          画板防错
+        </el-button>
       </template>
 
       <!-- 空状态 -->
@@ -132,11 +139,13 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
-import { Search, Refresh, Plus, Edit, Delete } from '@element-plus/icons-vue'
+import { useRoute, useRouter } from 'vue-router'
+import { Search, Refresh, Plus } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import axios from 'axios'
 import DataTable from '@/components/common/DataTable/index.vue'
-import type { TableColumn, CellChangeEvent } from '@/components/common/DataTable/types'
+import { getStoredTablePageSize, type TableColumn, type CellChangeEvent } from '@/components/common/DataTable/types'
+import { fmeaApi } from '@/api/fmea'
 import PartForm from './PartForm.vue'
 
 interface ProjectOption {
@@ -171,20 +180,9 @@ const filters = reactive({
   category: 'ALL'
 })
 
-const getStoredPageSize = () => {
-  try {
-    const saved = localStorage.getItem('sqm_table_pagesize_part_list')
-    if (saved) {
-      const num = parseInt(saved, 10)
-      if (num && !isNaN(num)) return num
-    }
-  } catch {}
-  return 10
-}
-
 const pagination = reactive({
   page: 1,
-  pageSize: getStoredPageSize(),
+  pageSize: getStoredTablePageSize('part_list', 10),
   total: 0
 })
 
@@ -235,6 +233,7 @@ const columns: TableColumn[] = [
     options: ['张工', '李工', '王工', '赵工', '陈工', '刘工']
   },
   { prop: 'remark', label: '工艺说明与备注', minWidth: 160, editable: true, editType: 'input' },
+  { prop: 'fmea_risk', label: 'FMEA防错经验', width: 136, align: 'center', slotName: 'fmea_risk', quickAddDisabled: true },
   { prop: 'created_at', label: '登记时间', width: 160, sortable: true, dataType: 'datetime' }
 ]
 
@@ -277,6 +276,14 @@ const fetchProjectOptions = async () => {
   }
 }
 
+const route = useRoute()
+const router = useRouter()
+const fmeaCountMap = ref<Record<string, { total: number; high: number }>>({})
+
+const jumpToPartFmea = (partNo: string) => {
+  router.push({ path: '/fmea/workspace', query: { refCode: partNo } })
+}
+
 const fetchData = async () => {
   loading.value = true
   try {
@@ -291,6 +298,13 @@ const fetchData = async () => {
     const res = await axios.get('/api/maindata/parts', { params })
     tableData.value = res.data.items || []
     pagination.total = res.data.total || 0
+
+    const codes = tableData.value.map((r) => r.part_no).filter(Boolean)
+    if (codes.length > 0) {
+      fmeaApi.getRefCounts(codes).then((cnts) => {
+        fmeaCountMap.value = cnts
+      }).catch(() => {})
+    }
   } catch (err: any) {
     ElMessage.error(`获取零件列表失败: ${err.response?.data?.detail || err.message}`)
   } finally {
@@ -358,6 +372,9 @@ const handleQuickAdd = async (payload: Record<string, any>, done: () => void) =>
 }
 
 onMounted(() => {
+  if (typeof route.query.keyword === 'string' && route.query.keyword.trim()) {
+    filters.keyword = route.query.keyword.trim()
+  }
   fetchProjectOptions()
   fetchData()
 })
@@ -392,11 +409,7 @@ onMounted(() => {
 }
 
 .filter-item-select {
-  width: 115px;
-}
-
-.filter-item-select {
-  width: 170px;
+  width: 150px;
 }
 
 .part-badge {

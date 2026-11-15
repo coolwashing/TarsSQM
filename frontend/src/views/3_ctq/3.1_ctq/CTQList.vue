@@ -8,6 +8,9 @@
       storage-key="ctq_list"
       import-key="ctq"
       import-title="CTQ关键质量特性"
+      show-actions
+      entity-label="CTQ关键质量特性"
+      :row-label-key="(r: CtqRow) => `${r.feature_name} (${r.feature_code})`"
       allow-quick-add
       quick-add-placeholder="快速添加新关键质量特性 (CTQ)..."
       :quick-add-defaults="{ feature_type: 'KPC', frequency: '首末件+每批5件' }"
@@ -16,6 +19,8 @@
       @size-change="handleSizeChange"
       @cell-change="handleCellChange"
       @quick-add="handleQuickAdd"
+      @edit="handleEdit"
+      @delete="handleDelete"
     >
       <!-- 顶部检索插槽 -->
       <template #search>
@@ -71,7 +76,7 @@
 
       <!-- 工具栏按钮 -->
       <template #toolbar>
-        <el-button type="primary" :icon="Plus" @click="handleCreate">
+        <el-button type="primary" size="small" :icon="Plus" @click="handleCreate">
           新增 CTQ 特征
         </el-button>
       </template>
@@ -82,26 +87,6 @@
           <span class="part-badge">{{ row.part_no }}</span>
           <span class="part-name">{{ row.part_name }}</span>
         </div>
-      </template>
-
-      <!-- 操作列 -->
-      <template #action="{ row }">
-        <el-button link type="primary" :icon="Edit" @click="handleEdit(row)">
-          编辑
-        </el-button>
-        <el-popconfirm
-          title="确认删除该关键质量特性配置？"
-          confirm-button-text="删除"
-          cancel-button-text="取消"
-          confirm-button-type="danger"
-          @confirm="handleDelete(row)"
-        >
-          <template #reference>
-            <el-button link type="danger" :icon="Delete">
-              删除
-            </el-button>
-          </template>
-        </el-popconfirm>
       </template>
 
       <!-- 空状态 -->
@@ -121,11 +106,11 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
-import { Search, Refresh, Plus, Edit, Delete } from '@element-plus/icons-vue'
+import { Search, Refresh, Plus } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import axios from 'axios'
 import DataTable from '@/components/common/DataTable/index.vue'
-import type { TableColumn, CellChangeEvent } from '@/components/common/DataTable/types'
+import { getStoredTablePageSize, type TableColumn, type CellChangeEvent } from '@/components/common/DataTable/types'
 import CTQForm from './CTQForm.vue'
 
 interface PartOption {
@@ -165,18 +150,9 @@ const filters = reactive({
   partId: undefined as number | undefined
 })
 
-const getStoredPageSize = (storageKey: string, fallback = 10) => {
-  try {
-    const v = localStorage.getItem(`${storageKey}_pagesize`)
-    return v ? Number(v) || fallback : fallback
-  } catch {
-    return fallback
-  }
-}
-
 const pagination = reactive({
   page: 1,
-  pageSize: getStoredPageSize('ctq_list', 10),
+  pageSize: getStoredTablePageSize('ctq_list', 10),
   total: 0
 })
 
@@ -341,13 +317,9 @@ const handleCellChange = async (event: CellChangeEvent) => {
     await axios.put(`/api/ctq/${event.row.id}`, {
       [event.prop]: event.value
     })
-    ElMessage.success({
-      message: `已自动更新 [${event.prop}]`,
-      duration: 1500
-    })
   } catch (err: any) {
+    event.row[event.prop] = event.oldValue
     ElMessage.error(`更新失败: ${err.response?.data?.detail || err.message}`)
-    fetchData()
   }
 }
 

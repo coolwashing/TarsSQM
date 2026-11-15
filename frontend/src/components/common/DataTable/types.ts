@@ -25,7 +25,7 @@ export interface TableColumn {
   autoFilter?: boolean // 智能自动表头筛选 (根据当前数据自动去重提取枚举)
   visible?: boolean
   slotName?: string
-  dataType?: 'text' | 'code' | 'badge' | 'date' | 'datetime' | 'number' // 自动格式化数据类型
+  dataType?: 'text' | 'code' | 'badge' | 'date' | 'datetime' | 'number' | 'image' | 'attachment' // 自动格式化数据类型
 
   // ========== 飞书多维表格行内编辑拓展 ==========
   editable?: boolean // 是否支持单元格行内快编
@@ -87,4 +87,23 @@ export interface HistoryCommand {
   type: 'cell-edit' | 'batch-fill'
   label: string
   items: HistoryCommandItem[]
+}
+
+export const TABLE_PAGESIZE_PREFIX = 'sqm_table_pagesize_'
+
+/**
+ * 统一读取本地持久化的每页条数偏好（与 DataTable 内部写入 Key 严格对齐，避免首屏重复请求）
+ */
+export function getStoredTablePageSize(storageKey?: string, fallback = 10): number {
+  const key = storageKey ? `${TABLE_PAGESIZE_PREFIX}${storageKey}` : `${TABLE_PAGESIZE_PREFIX}default`
+  try {
+    const saved = localStorage.getItem(key)
+    if (saved) {
+      const parsed = parseInt(saved, 10)
+      if (!isNaN(parsed) && parsed > 0) return parsed
+    }
+  } catch {
+    // 忽略隐私模式或存储受限错误
+  }
+  return fallback
 }

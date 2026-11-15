@@ -1,0 +1,3103 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SQM · FMEA 风险画板</title>
+  <style>
+    :root {
+      --bg-canvas: #f5f7fa;
+      --surface: #ffffff;
+      --ink: #0f172a;
+      --ink-2: #334155;
+      --ink-3: #64748b;
+      --ink-4: #94a3b8;
+      --line: #e2e8f0;
+      --line-strong: #cbd5e1;
+      --accent: #2563eb;
+      --accent-soft: #eff6ff;
+      --high: #e11d48;
+      --high-soft: #fff1f2;
+      --med: #d97706;
+      --med-soft: #fffbeb;
+      --low: #059669;
+      --low-soft: #ecfdf5;
+      --radius: 10px;
+      --shadow-sm: 0 1px 3px rgba(15, 23, 42, 0.06), 0 1px 2px rgba(15, 23, 42, 0.04);
+      --shadow-md: 0 8px 24px -4px rgba(15, 23, 42, 0.1), 0 2px 6px -1px rgba(15, 23, 42, 0.05);
+      --shadow-lg: 0 20px 44px -8px rgba(15, 23, 42, 0.18), 0 4px 12px -2px rgba(15, 23, 42, 0.06);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Inter", "PingFang SC", "Microsoft YaHei", sans-serif;
+      color: var(--ink);
+      background: var(--bg-canvas);
+      height: 100vh;
+      overflow: hidden;
+      display: flex;
+      font-size: 13px;
+      -webkit-font-smoothing: antialiased;
+      user-select: none;
+    }
+
+    svg.ico {
+      width: 15px;
+      height: 15px;
+      stroke: currentColor;
+      stroke-width: 1.8;
+      fill: none;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      flex-shrink: 0;
+    }
+
+    /* ================= 1. 极简左侧系统栏 (默认收起为 52px 图标轨，悬停/点击可展开，绝不抢画布空间) ================= */
+    .sys-rail {
+      width: 54px;
+      background: #0f172a;
+      color: #94a3b8;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 10px 0;
+      flex-shrink: 0;
+      z-index: 40;
+      transition: width 0.18s ease;
+    }
+    .sys-rail.expanded {
+      width: 184px;
+      align-items: stretch;
+      padding: 10px 8px;
+    }
+    .rail-logo {
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      background: #2563eb;
+      color: #fff;
+      font-weight: 700;
+      font-size: 12.5px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 14px;
+      cursor: pointer;
+    }
+    .sys-rail.expanded .rail-logo {
+      margin: 0 6px 14px;
+      width: auto;
+      justify-content: flex-start;
+      padding: 0 10px;
+      gap: 8px;
+    }
+    .rail-label { display: none; font-size: 12.5px; white-space: nowrap; }
+    .sys-rail.expanded .rail-label { display: inline; }
+
+    .rail-item {
+      height: 36px;
+      width: 36px;
+      margin: 2px auto;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 9px;
+      cursor: pointer;
+      color: #94a3b8;
+      transition: all 0.14s;
+    }
+    .sys-rail.expanded .rail-item {
+      width: 100%;
+      justify-content: flex-start;
+      padding: 0 10px;
+    }
+    .rail-item:hover { background: rgba(255, 255, 255, 0.07); color: #f8fafc; }
+    .rail-item.active { background: rgba(37, 99, 235, 0.24); color: #fff; font-weight: 600; }
+    .rail-foot { margin-top: auto; }
+
+    /* ================= 2. 44px 极简顶栏 (只放高频核心动作，低频全部收进 ⋯) ================= */
+    .main-shell {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .topbar {
+      height: 44px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--line);
+      padding: 0 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      z-index: 30;
+      flex-shrink: 0;
+    }
+    .tb-group { display: flex; align-items: center; gap: 8px; }
+
+    .crumb-bar {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12.5px;
+      color: var(--ink-3);
+    }
+    .crumb-bar b {
+      color: var(--ink);
+      font-weight: 600;
+    }
+
+    /* 主体左右分栏：左侧可收起模块目录与大纲 + 右侧主视口 */
+    .workspace-row {
+      flex: 1;
+      display: flex;
+      min-height: 0;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .module-nav {
+      width: 212px;
+      background: var(--surface);
+      border-right: 1px solid var(--line);
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+      z-index: 22;
+      transition: width 0.18s ease;
+      overflow: hidden;
+    }
+    .module-nav.collapsed {
+      width: 0;
+      border-right: none;
+    }
+    .mn-sec-head {
+      height: 34px;
+      padding: 0 10px 0 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--ink-3);
+      letter-spacing: 0.02em;
+      border-bottom: 1px solid #f1f5f9;
+      flex-shrink: 0;
+      white-space: nowrap;
+    }
+    .mn-scroll-top {
+      max-height: 44%;
+      overflow-y: auto;
+      padding: 6px;
+      border-bottom: 1px solid var(--line);
+    }
+    .mn-scroll-btm {
+      flex: 1;
+      overflow-y: auto;
+      padding: 6px;
+    }
+    .mn-group-title {
+      font-size: 10.5px;
+      font-weight: 600;
+      color: var(--ink-4);
+      padding: 6px 8px 3px;
+      white-space: nowrap;
+    }
+    .mn-row {
+      height: 29px;
+      padding: 0 8px;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 6px;
+      font-size: 12px;
+      color: var(--ink-2);
+      cursor: pointer;
+      white-space: nowrap;
+      transition: background 0.12s, color 0.12s;
+    }
+    .mn-row:hover {
+      background: #f1f5f9;
+      color: var(--ink);
+    }
+    .mn-row.active {
+      background: var(--accent-soft);
+      color: var(--accent);
+      font-weight: 600;
+    }
+    .mn-row-left {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      min-width: 0;
+      overflow: hidden;
+    }
+    .mn-row-left span.txt {
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .mn-cnt {
+      font-size: 10.5px;
+      color: var(--ink-4);
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      flex-shrink: 0;
+    }
+
+    .seg-tabs {
+      display: inline-flex;
+      background: #f1f5f9;
+      padding: 2px;
+      border-radius: 7px;
+      gap: 2px;
+    }
+    .seg-tab {
+      height: 26px;
+      padding: 0 12px;
+      border: none;
+      border-radius: 5px;
+      background: transparent;
+      color: var(--ink-3);
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.14s;
+    }
+    .seg-tab.active {
+      background: #fff;
+      color: var(--ink);
+      box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+    }
+
+    .search-box {
+      position: relative;
+      display: flex;
+      align-items: center;
+    }
+    .search-box svg {
+      position: absolute;
+      left: 8px;
+      color: var(--ink-4);
+      width: 13.5px;
+      height: 13.5px;
+    }
+    .search-input {
+      height: 28px;
+      width: 156px;
+      padding: 0 8px 0 26px;
+      border-radius: 6px;
+      border: 1px solid var(--line);
+      background: #f8fafc;
+      font-size: 12px;
+      color: var(--ink);
+      outline: none;
+      transition: all 0.15s;
+    }
+    .search-input:focus {
+      width: 196px;
+      background: #fff;
+      border-color: var(--accent);
+    }
+
+    .btn {
+      height: 28px;
+      padding: 0 10px;
+      border-radius: 6px;
+      border: 1px solid var(--line);
+      background: #fff;
+      color: var(--ink-2);
+      font-size: 12px;
+      font-weight: 500;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      cursor: pointer;
+      transition: all 0.14s;
+      white-space: nowrap;
+    }
+    .btn:hover { background: #f8fafc; border-color: var(--line-strong); }
+    .btn.active-filter {
+      background: var(--high-soft);
+      border-color: #fda4af;
+      color: var(--high);
+      font-weight: 600;
+    }
+    .btn-primary {
+      background: var(--ink);
+      border-color: var(--ink);
+      color: #fff;
+      font-weight: 600;
+    }
+    .btn-primary:hover { background: #1e293b; border-color: #1e293b; }
+    .btn-blue {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+      font-weight: 600;
+    }
+    .btn-blue:hover { background: #1d4ed8; }
+    .btn-icon { width: 28px; padding: 0; justify-content: center; }
+
+    /* ⋯ 更多下拉菜单 */
+    .more-wrap { position: relative; }
+    .dropdown-menu {
+      position: absolute;
+      top: 34px;
+      right: 0;
+      width: 156px;
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      box-shadow: var(--shadow-md);
+      padding: 4px;
+      display: none;
+      z-index: 60;
+    }
+    .dropdown-menu.open { display: block; }
+    .dd-item {
+      height: 30px;
+      padding: 0 9px;
+      border-radius: 5px;
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      font-size: 12px;
+      color: var(--ink-2);
+      cursor: pointer;
+    }
+    .dd-item:hover { background: #f1f5f9; color: var(--ink); }
+
+    /* ================= 3. 100% 全屏纯净画布 (清空四角，仅留底部短工具坞 + 右下角缩放微标) ================= */
+    .stage-canvas {
+      flex: 1;
+      position: relative;
+      overflow: hidden;
+      cursor: grab;
+      background-color: var(--bg-canvas);
+      background-image: radial-gradient(#cbd5e1 1.1px, transparent 1.1px);
+      background-size: 20px 20px;
+    }
+    .stage-canvas.panning { cursor: grabbing; }
+    .stage-canvas.pin-cursor { cursor: crosshair; }
+    .stage-canvas.drop-ready::after {
+      content: '松开鼠标，置入底图';
+      position: absolute;
+      inset: 20px;
+      border: 2px dashed var(--accent);
+      border-radius: 12px;
+      background: rgba(37, 99, 235, 0.06);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--accent);
+      pointer-events: none;
+      z-index: 45;
+    }
+
+    .world {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 3200px;
+      height: 2200px;
+      transform-origin: 0 0;
+    }
+
+    /* SVG 贝塞尔连线 */
+    .edges-svg {
+      position: absolute;
+      inset: 0;
+      width: 3200px;
+      height: 2200px;
+      pointer-events: none;
+      z-index: 4;
+      overflow: visible;
+    }
+    .edge-hit {
+      fill: none;
+      stroke: transparent;
+      stroke-width: 16px;
+      pointer-events: stroke;
+      cursor: pointer;
+    }
+    .edge-line {
+      fill: none;
+      stroke-width: 1.8px;
+      pointer-events: none;
+      transition: stroke-width 0.15s, opacity 0.2s;
+    }
+    .edge-group.selected .edge-line {
+      stroke-width: 2.8px;
+    }
+
+    /* 连线极简 2~4 字微标（绝不遮挡节点！） */
+    .edge-labels {
+      position: absolute;
+      top: 0;
+      left: 0;
+      z-index: 7;
+    }
+    .edge-tag {
+      position: absolute;
+      transform: translate(-50%, -50%);
+      height: 22px;
+      padding: 0 8px;
+      border-radius: 99px;
+      background: #ffffff;
+      border: 1px solid var(--line-strong);
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--ink-2);
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      box-shadow: var(--shadow-sm);
+      cursor: pointer;
+      white-space: nowrap;
+      transition: transform 0.12s, border-color 0.12s, opacity 0.2s;
+    }
+    .edge-tag:hover {
+      transform: translate(-50%, -50%) scale(1.05);
+      border-color: var(--accent);
+    }
+    .edge-tag.selected {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 2.5px rgba(37, 99, 235, 0.22);
+      color: var(--accent);
+    }
+
+    .dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      display: inline-block;
+      flex-shrink: 0;
+    }
+    .dot.HIGH { background: var(--high); }
+    .dot.MED { background: var(--med); }
+    .dot.LOW { background: var(--low); }
+
+    /* 画布元素 1：图纸底板（极简窄头 + 右下角自由缩放手柄 + 干净圆点图钉） */
+    .board-frame {
+      position: absolute;
+      background: #0f172a;
+      border: 1.5px solid #334155;
+      border-radius: 10px;
+      box-shadow: var(--shadow-md);
+      z-index: 2;
+      transition: border-color 0.15s, opacity 0.2s;
+    }
+    .board-frame.selected {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.25), var(--shadow-md);
+    }
+    .bf-bar {
+      height: 28px;
+      padding: 0 10px;
+      background: #1e293b;
+      border-radius: 8.5px 8.5px 0 0;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      color: #cbd5e1;
+      font-size: 11.5px;
+      font-weight: 600;
+      cursor: move;
+    }
+    .bf-canvas {
+      position: relative;
+      width: 100%;
+      height: calc(100% - 28px);
+      border-radius: 0 0 8.5px 8.5px;
+      overflow: hidden;
+    }
+    .bf-canvas img {
+      width: 100%;
+      height: 100%;
+      object-fit: fill;
+      display: block;
+      pointer-events: none;
+    }
+
+    .resize-grip {
+      position: absolute;
+      right: -5px;
+      bottom: -5px;
+      width: 12px;
+      height: 12px;
+      border-radius: 3px;
+      background: #fff;
+      border: 2px solid var(--accent);
+      cursor: nwse-resize;
+      opacity: 0;
+      z-index: 12;
+      transition: opacity 0.14s;
+    }
+    .board-frame:hover .resize-grip,
+    .board-frame.selected .resize-grip { opacity: 1; }
+
+    /* 图纸上的数字风险图钉（22px 精致圆章，可拖拽微调，悬停可连线） */
+    .pin-marker {
+      position: absolute;
+      transform: translate(-50%, -50%);
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: var(--high);
+      color: #fff;
+      font-size: 11px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 2px solid #fff;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+      cursor: grab;
+      z-index: 6;
+      transition: transform 0.12s;
+    }
+    .pin-marker.MED { background: var(--med); }
+    .pin-marker.LOW { background: var(--low); }
+    .pin-marker:hover,
+    .pin-marker.selected {
+      transform: translate(-50%, -50%) scale(1.22);
+      box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.55), 0 4px 10px rgba(0,0,0,0.4);
+    }
+
+    /* 画布元素 2：极简部件/工序节点卡（184px 宽，只显「名称 + 短码 + 风险圆点」，零废话！） */
+    .node-card {
+      position: absolute;
+      width: 184px;
+      background: var(--surface);
+      border: 1px solid var(--line-strong);
+      border-radius: 10px;
+      padding: 10px 12px;
+      box-shadow: var(--shadow-sm);
+      cursor: grab;
+      z-index: 6;
+      transition: box-shadow 0.15s, border-color 0.15s, opacity 0.2s;
+    }
+    .node-card:hover {
+      border-color: #94a3b8;
+      box-shadow: var(--shadow-md);
+    }
+    .node-card.selected {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 2.5px rgba(37, 99, 235, 0.22), var(--shadow-md);
+      z-index: 9;
+    }
+    .nc-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 6px;
+      margin-bottom: 3px;
+    }
+    .nc-name {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--ink);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .nc-code {
+      font-size: 11px;
+      color: var(--ink-3);
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      margin-bottom: 8px;
+    }
+    .nc-meta {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding-top: 7px;
+      border-top: 1px solid #f1f5f9;
+      font-size: 11px;
+      color: var(--ink-3);
+    }
+    .nc-risk-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-weight: 600;
+    }
+
+    /* 四向连线微锚点 */
+    .port {
+      position: absolute;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: #fff;
+      border: 2px solid var(--accent);
+      cursor: crosshair;
+      opacity: 0;
+      z-index: 11;
+      transition: opacity 0.12s, transform 0.12s;
+    }
+    .node-card:hover .port,
+    .board-frame:hover .port,
+    .stage-canvas.linking .port { opacity: 1; }
+    .port:hover { transform: scale(1.35); background: var(--accent); }
+    .port.r { right: -5px; top: 50%; margin-top: -5px; }
+    .port.l { left: -5px; top: 50%; margin-top: -5px; }
+    .port.t { top: -5px; left: 50%; margin-left: -5px; }
+    .port.b { bottom: -5px; left: 50%; margin-left: -5px; }
+
+    .dimmed { opacity: 0.18 !important; }
+
+    /* 底部居中轻盈短工具坞（Figma 范式：纯 SVG 线性图标 + 2 字短词） */
+    .bottom-dock {
+      position: absolute;
+      bottom: 16px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #ffffff;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 4px;
+      display: inline-flex;
+      align-items: center;
+      gap: 2px;
+      box-shadow: var(--shadow-md);
+      z-index: 20;
+    }
+    .dock-item {
+      height: 30px;
+      padding: 0 10px;
+      border: none;
+      border-radius: 7px;
+      background: transparent;
+      color: var(--ink-2);
+      font-size: 12px;
+      font-weight: 600;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      cursor: pointer;
+      transition: all 0.12s;
+    }
+    .dock-item:hover { background: #f1f5f9; color: var(--ink); }
+    .dock-item.active { background: var(--ink); color: #fff; }
+    .dock-div { width: 1px; height: 16px; background: var(--line); margin: 0 2px; }
+
+    /* 右下角浓缩撤销与缩放胶囊 */
+    .corner-zoom {
+      position: absolute;
+      right: 14px;
+      bottom: 16px;
+      background: #ffffff;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 3px 5px;
+      display: inline-flex;
+      align-items: center;
+      gap: 2px;
+      box-shadow: var(--shadow-sm);
+      z-index: 20;
+      transition: right 0.2s ease;
+    }
+    .corner-zoom.shifted { right: 392px; }
+    .cz-btn {
+      width: 24px;
+      height: 24px;
+      border: none;
+      border-radius: 5px;
+      background: transparent;
+      color: var(--ink-2);
+      font-size: 12px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .cz-btn:hover:not(:disabled) { background: #f1f5f9; }
+    .cz-btn:disabled { opacity: 0.32; cursor: default; }
+    .cz-val {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--ink-3);
+      min-width: 38px;
+      text-align: center;
+      cursor: pointer;
+    }
+
+    /* ================= 4. 右侧「按需悬浮卡片面板（368px）」(默认完全隐藏，点空白即收！) ================= */
+    .floating-panel {
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      bottom: 12px;
+      width: 368px;
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      box-shadow: var(--shadow-lg);
+      display: flex;
+      flex-direction: column;
+      z-index: 25;
+      transform: translateX(396px);
+      opacity: 0;
+      pointer-events: none;
+      transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.16s ease;
+      user-select: text;
+    }
+    .floating-panel.open {
+      transform: translateX(0);
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .fp-head {
+      padding: 12px 14px 10px;
+      border-bottom: 1px solid var(--line);
+    }
+    .fp-top-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 6px;
+    }
+    .fp-kind {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--ink-3);
+      background: #f1f5f9;
+      padding: 2px 7px;
+      border-radius: 4px;
+    }
+    .fp-title-inp {
+      width: 100%;
+      border: 1px solid transparent;
+      border-radius: 5px;
+      font-size: 14.5px;
+      font-weight: 700;
+      color: var(--ink);
+      padding: 2px 5px;
+      margin-left: -5px;
+      outline: none;
+      background: transparent;
+    }
+    .fp-title-inp:hover { background: #f8fafc; }
+    .fp-title-inp:focus { background: #fff; border-color: var(--accent); }
+
+    .fp-sub-inp {
+      width: 100%;
+      border: 1px solid transparent;
+      border-radius: 5px;
+      font-size: 11.5px;
+      color: var(--ink-3);
+      padding: 2px 5px;
+      margin-left: -5px;
+      outline: none;
+      background: transparent;
+    }
+    .fp-sub-inp:hover { background: #f8fafc; }
+    .fp-sub-inp:focus { background: #fff; border-color: var(--accent); }
+
+    .fp-body {
+      flex: 1;
+      overflow-y: auto;
+      padding: 12px;
+      background: #f8fafc;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    /* 上图下文 FMEA 卡片（照片清晰无重叠，字段紧凑克制） */
+    .fmea-card {
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      overflow: hidden;
+      box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03);
+    }
+    .fc-photos {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+      gap: 6px;
+      padding: 8px 8px 0;
+    }
+    .fc-photo-item {
+      border-radius: 7px;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      background: #0f172a;
+      position: relative;
+      cursor: zoom-in;
+    }
+    .fc-photo-item img {
+      width: 100%;
+      height: 92px;
+      object-fit: cover;
+      display: block;
+    }
+    .fc-photo-badge {
+      position: absolute;
+      top: 5px;
+      left: 5px;
+      padding: 1px 5px;
+      border-radius: 4px;
+      font-size: 10px;
+      font-weight: 700;
+      color: #fff;
+    }
+    .fc-photo-badge.NG { background: rgba(225, 29, 72, 0.88); }
+    .fc-photo-badge.OK { background: rgba(5, 150, 105, 0.88); }
+    .fc-photo-cap {
+      background: #fff;
+      padding: 3px 6px;
+      font-size: 10.5px;
+      color: var(--ink-3);
+      border-top: 1px solid var(--line);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .fc-main { padding: 10px 12px; }
+    .fc-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 6px;
+    }
+    .fc-mode {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--ink);
+      line-height: 1.35;
+    }
+    .r-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 1px 7px;
+      border-radius: 99px;
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+    .r-pill.HIGH { background: var(--high-soft); color: var(--high); }
+    .r-pill.MED { background: var(--med-soft); color: var(--med); }
+    .r-pill.LOW { background: var(--low-soft); color: var(--low); }
+
+    .fc-row {
+      font-size: 12px;
+      color: var(--ink-2);
+      line-height: 1.48;
+      margin-bottom: 4px;
+    }
+    .fc-row span.k {
+      color: var(--ink-3);
+      font-weight: 600;
+      margin-right: 4px;
+    }
+
+    /* 短码软标签（只显示 PRT-102 / SUP-008 短码，悬停显示全名，绝不臃肿！） */
+    .fc-foot {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 6px;
+      margin-top: 8px;
+      padding-top: 8px;
+      border-top: 1px solid #f1f5f9;
+      flex-wrap: wrap;
+    }
+    .short-tags {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      flex-wrap: wrap;
+    }
+    .s-chip {
+      height: 20px;
+      padding: 0 6px;
+      border-radius: 4px;
+      font-size: 10.5px;
+      font-weight: 600;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      display: inline-flex;
+      align-items: center;
+      cursor: pointer;
+      background: #f1f5f9;
+      color: var(--ink-2);
+      border: 1px solid var(--line);
+    }
+    .s-chip:hover { border-color: var(--accent); color: var(--accent); }
+    .s-chip.free {
+      font-family: inherit;
+      border-style: dashed;
+      background: #fff;
+      color: var(--ink-3);
+    }
+    .link-act {
+      border: none;
+      background: transparent;
+      font-size: 11.5px;
+      color: var(--ink-3);
+      cursor: pointer;
+      padding: 2px 4px;
+      border-radius: 4px;
+    }
+    .link-act:hover { background: #f1f5f9; color: var(--ink); }
+
+    /* ================= 5. 视图二：图鉴墙 & 视图三：台账 ================= */
+    .sub-view {
+      flex: 1;
+      overflow-y: auto;
+      padding: 18px 22px;
+      display: none;
+      user-select: text;
+    }
+    .sub-view.active { display: block; }
+    .gal-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: 14px;
+    }
+
+    .tbl-box {
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      overflow: hidden;
+    }
+    table.std-table { width: 100%; border-collapse: collapse; }
+    .std-table th {
+      height: 36px;
+      padding: 0 12px;
+      background: #f8fafc;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      font-size: 11.5px;
+      font-weight: 600;
+      color: var(--ink-3);
+    }
+    .std-table td {
+      height: 40px;
+      padding: 6px 12px;
+      border-bottom: 1px solid #f1f5f9;
+      font-size: 12.5px;
+      color: var(--ink-2);
+    }
+    .std-table tr:hover td { background: #f8fafc; }
+
+    /* ================= 6. 轻量弹窗与灯箱 ================= */
+    .modal-bg {
+      position: fixed;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.42);
+      z-index: 80;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .modal-bg.open { display: flex; }
+    .modal-card {
+      background: #fff;
+      border-radius: 12px;
+      width: 560px;
+      max-width: 94vw;
+      max-height: 86vh;
+      display: flex;
+      flex-direction: column;
+      box-shadow: var(--shadow-lg);
+      overflow: hidden;
+      user-select: text;
+    }
+    .mc-head {
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--line);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 13.5px;
+      font-weight: 700;
+    }
+    .mc-body { padding: 14px 16px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
+    .mc-foot {
+      padding: 10px 16px;
+      border-top: 1px solid var(--line);
+      background: #f8fafc;
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+    }
+    .f-lbl { display: block; font-size: 11.5px; font-weight: 600; color: var(--ink-3); margin-bottom: 4px; }
+    .f-inp, .f-sel, .f-txt {
+      width: 100%;
+      border: 1px solid var(--line-strong);
+      border-radius: 6px;
+      padding: 6px 9px;
+      font-size: 12.5px;
+      font-family: inherit;
+      color: var(--ink);
+      outline: none;
+    }
+    .f-inp:focus, .f-sel:focus, .f-txt:focus { border-color: var(--accent); }
+
+    .pop-mini {
+      position: fixed;
+      z-index: 90;
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: 9px;
+      box-shadow: var(--shadow-md);
+      padding: 10px 12px;
+      width: 248px;
+      display: none;
+      font-size: 12px;
+    }
+    .pop-mini.open { display: block; }
+
+    .toast-layer {
+      position: fixed;
+      top: 12px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 120;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      pointer-events: none;
+    }
+    .toast-pill {
+      background: var(--ink);
+      color: #fff;
+      padding: 6px 14px;
+      border-radius: 99px;
+      font-size: 12px;
+      font-weight: 500;
+      box-shadow: var(--shadow-md);
+    }
+  </style>
+</head>
+<body>
+  <div class="toast-layer" id="toastLayer"></div>
+  <input type="file" id="imgPicker" accept="image/*" style="display:none" />
+  <input type="file" id="jsonPicker" accept=".json,application/json" style="display:none" />
+
+  <!-- ================= 1. 极简左侧图标导航轨 ================= -->
+  <aside class="sys-rail" id="sysRail">
+    <div class="rail-logo" onclick="document.getElementById('sysRail').classList.toggle('expanded')" title="展开/收起系统菜单">
+      <span>SQ</span>
+      <span class="rail-label">SQM 质量系统</span>
+    </div>
+    <div class="rail-item" title="供应商清单" onclick="toast('点击卡片短码即可预览关联供应商')">
+      <svg class="ico" viewBox="0 0 24 24"><path d="M3 21h18M5 21V7l8-4v18M19 21V11l-6-4"/></svg>
+      <span class="rail-label">供应商清单</span>
+    </div>
+    <div class="rail-item" title="零件清单" onclick="toast('点击卡片短码即可预览关联零件')">
+      <svg class="ico" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9c.26.6.77 1.05 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      <span class="rail-label">零件清单</span>
+    </div>
+    <div class="rail-item" title="质量问题清单" onclick="openAiModal()">
+      <svg class="ico" viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+      <span class="rail-label">质量问题清单</span>
+    </div>
+    <div class="rail-item active" title="FMEA 风险画板">
+      <svg class="ico" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+      <span class="rail-label">FMEA 风险画板</span>
+    </div>
+    <div class="rail-item rail-foot" title="展开/收起导航" onclick="document.getElementById('sysRail').classList.toggle('expanded')">
+      <svg class="ico" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="3" x2="9" y2="21"/></svg>
+      <span class="rail-label">收起侧栏</span>
+    </div>
+  </aside>
+
+  <!-- ================= 2. 主壳层（一顶 + 全屏画布 + 一底） ================= -->
+  <main class="main-shell">
+    <!-- 44px 极简顶栏 -->
+    <header class="topbar">
+      <div class="tb-group">
+        <button class="btn btn-icon" id="btnToggleNav" onclick="toggleModuleNav()" title="收起/展开左侧模块清单">
+          <svg class="ico" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="3" x2="9" y2="21"/></svg>
+        </button>
+        <div class="crumb-bar" id="topCrumb"></div>
+      </div>
+
+      <div class="seg-tabs">
+        <button class="seg-tab active" id="tabCanvas" onclick="switchView('canvas')">画板</button>
+        <button class="seg-tab" id="tabGallery" onclick="switchView('gallery')">图鉴</button>
+        <button class="seg-tab" id="tabLedger" onclick="switchView('ledger')">台账</button>
+      </div>
+
+      <div class="tb-group">
+        <div class="search-box">
+          <svg class="ico" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input class="search-input" id="kwInput" placeholder="搜模式 / 编码..." oninput="renderAll()" />
+        </div>
+
+        <button class="btn" id="btnHighOnly" onclick="toggleHighFilter()" title="仅高亮高风险项">
+          <span class="dot HIGH"></span>高危
+        </button>
+
+        <button class="btn btn-primary" onclick="openAiModal()">
+          <svg class="ico" viewBox="0 0 24 24"><path d="M12 3l1.9 5.8a2 2 0 0 0 1.3 1.3L21 12l-5.8 1.9a2 2 0 0 0-1.3 1.3L12 21l-1.9-5.8a2 2 0 0 0-1.3-1.3L3 12l5.8-1.9a2 2 0 0 0 1.3-1.3L12 3z"/></svg>
+          AI 录入
+        </button>
+
+        <div class="more-wrap">
+          <button class="btn btn-icon" onclick="toggleMoreMenu(event)" title="更多操作">
+            <svg class="ico" viewBox="0 0 24 24"><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/><circle cx="5" cy="12" r="1.5"/></svg>
+          </button>
+          <div class="dropdown-menu" id="moreMenu">
+            <div class="dd-item" onclick="exportJson()">
+              <svg class="ico" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              导出备份 JSON
+            </div>
+            <div class="dd-item" onclick="document.getElementById('jsonPicker').click()">
+              <svg class="ico" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+              导入备份 JSON
+            </div>
+            <div class="dd-item" onclick="resetFactory()">
+              <svg class="ico" viewBox="0 0 24 24"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+              恢复初始示例
+            </div>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <div class="workspace-row">
+      <!-- 左侧可收起模块目录与当前画板大纲 (Figma Pages + Layers 范式) -->
+      <aside class="module-nav" id="moduleNav">
+        <div class="mn-sec-head">
+          <span>系统与模块画板</span>
+          <div style="display:flex;align-items:center;gap:2px">
+            <button class="link-act" onclick="openNewBoardModal()" title="新建模块画板" style="padding:2px 5px;font-weight:700">+</button>
+            <button class="link-act" onclick="toggleModuleNav()" title="收起目录">«</button>
+          </div>
+        </div>
+        <div class="mn-scroll-top" id="navBoardTree"></div>
+
+        <div class="mn-sec-head" style="border-top:1px solid #f8fafc">
+          <span>当前画板大纲</span>
+          <span id="navOutlineCount" style="font-weight:500;color:var(--ink-4)"></span>
+        </div>
+        <div class="mn-scroll-btm" id="navOutlineList"></div>
+      </aside>
+
+      <!-- ================= 视图 1：全屏自由画布 + 按需悬浮右侧卡片 ================= -->
+      <div class="stage-canvas" id="stageCanvas">
+      <div class="world" id="world">
+        <svg class="edges-svg" id="edgesSvg">
+          <defs>
+            <marker id="arrHigh" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+              <path d="M 0 1.5 L 9 5 L 0 8.5 z" fill="#e11d48" />
+            </marker>
+            <marker id="arrMed" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+              <path d="M 0 1.5 L 9 5 L 0 8.5 z" fill="#d97706" />
+            </marker>
+            <marker id="arrDef" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+              <path d="M 0 1.5 L 9 5 L 0 8.5 z" fill="#94a3b8" />
+            </marker>
+          </defs>
+        </svg>
+        <div class="edge-labels" id="edgeLabels"></div>
+        <div id="boardsLayer"></div>
+        <div id="nodesLayer"></div>
+      </div>
+
+      <!-- 底部轻量化短工具坞（纯 SVG 线性图标 + 2 字短词，零 Emoji） -->
+      <div class="bottom-dock">
+        <button class="dock-item active" id="toolSelect" onclick="setTool('select')">
+          <svg class="ico" viewBox="0 0 24 24"><path d="M3 3l7.07 16.97 2.51-7.39 7.39-2.51L3 3z"/></svg>选择
+        </button>
+        <button class="dock-item" id="toolPin" onclick="setTool('pin')" title="点击底图任意位置添加数字风险点">
+          <svg class="ico" viewBox="0 0 24 24"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>打点
+        </button>
+        <div class="dock-div"></div>
+        <button class="dock-item" onclick="addBoardImage()" title="上传图纸或直接 Ctrl+V 粘贴剪贴板图片">
+          <svg class="ico" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>底图
+        </button>
+        <button class="dock-item" onclick="addNodeInstant()">
+          <svg class="ico" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><line x1="12" y1="9" x2="12" y2="15"/><line x1="9" y1="12" x2="15" y2="12"/></svg>节点
+        </button>
+        <button class="dock-item" onclick="autoLayout()">
+          <svg class="ico" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><path d="M10 6.5h4M17.5 10v4"/></svg>理线
+        </button>
+      </div>
+
+      <!-- 右下角浓缩撤销与缩放 -->
+      <div class="corner-zoom" id="cornerZoom">
+        <button class="cz-btn" id="btnUndo" onclick="undo()" title="撤销 Ctrl+Z">
+          <svg class="ico" style="width:13px;height:13px" viewBox="0 0 24 24"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"/></svg>
+        </button>
+        <button class="cz-btn" id="btnRedo" onclick="redo()" title="重做 Ctrl+Y">
+          <svg class="ico" style="width:13px;height:13px" viewBox="0 0 24 24"><path d="M21 7v6h-6"/><path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3l3 2.7"/></svg>
+        </button>
+        <div class="dock-div"></div>
+        <button class="cz-btn" onclick="zoomStep(-0.1)">−</button>
+        <span class="cz-val" id="zoomVal" onclick="resetView()" title="点击复位 100%">100%</span>
+        <button class="cz-btn" onclick="zoomStep(0.1)">+</button>
+      </div>
+
+      <!-- 右侧按需悬浮面板（368px，默认完全隐藏，点选对象才浮出，点画布空白即收） -->
+      <aside class="floating-panel" id="floatPanel" onmousedown="event.stopPropagation()">
+        <div class="fp-head">
+          <div class="fp-top-bar">
+            <span class="fp-kind" id="fpKind">部件节点</span>
+            <div style="display:flex;align-items:center;gap:4px">
+              <button class="btn btn-blue" style="height:24px;padding:0 8px;font-size:11.5px" id="fpAddBtn" onclick="openCardModal()">+ 失效卡</button>
+              <button class="btn btn-icon" style="height:24px;width:24px;color:var(--ink-3)" onclick="deleteActiveSelection()" title="删除当前对象 (Del)">
+                <svg class="ico" style="width:13.5px;height:13.5px" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>
+              </button>
+              <button class="btn btn-icon" style="height:24px;width:24px;border:none" onclick="clearSelection()" title="收起">
+                <svg class="ico" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              </button>
+            </div>
+          </div>
+          <input class="fp-title-inp" id="fpTitle" onchange="renameSelection(this.value)" title="点击直接改名（连线建议 ≤4 字）" />
+          <input class="fp-sub-inp" id="fpSub" placeholder="补充零件短码 / 规格..." onchange="resubSelection(this.value)" />
+        </div>
+        <div class="fp-body" id="fpBody"></div>
+      </aside>
+    </div>
+
+    <!-- ================= 视图 2：图鉴墙 ================= -->
+    <div class="sub-view" id="stageGallery">
+      <div class="gal-grid" id="galGrid"></div>
+    </div>
+
+    <!-- ================= 视图 3：同源台账 ================= -->
+    <div class="sub-view" id="stageLedger">
+      <div class="tbl-box">
+        <table class="std-table">
+          <thead>
+            <tr>
+              <th style="width:88px">载体</th>
+              <th style="width:140px">部位 / 接口</th>
+              <th style="width:76px">实拍</th>
+              <th style="width:210px">失效模式 → 后果</th>
+              <th>失效机理 & 防错规范</th>
+              <th style="width:96px">风险</th>
+              <th style="width:170px">关联短码</th>
+              <th style="width:72px;text-align:center">画板</th>
+            </tr>
+          </thead>
+          <tbody id="ledgerBody"></tbody>
+        </table>
+      </div>
+    </div>
+    </div>
+  </main>
+
+  <!-- ================= 轻量小浮层：风险打分 & 短码详情穿透 ================= -->
+  <div class="pop-mini" id="riskPop">
+    <div style="display:flex;justify-content:space-between;font-weight:700;margin-bottom:7px">
+      <span>风险评估（S·O·D 选填）</span>
+      <span style="cursor:pointer;color:var(--ink-4)" onclick="closePops()">✕</span>
+    </div>
+    <div style="display:flex;gap:4px;margin-bottom:8px">
+      <button class="btn" style="flex:1;justify-content:center;height:25px" onclick="setQuickRisk('HIGH')"><span class="dot HIGH"></span>高危</button>
+      <button class="btn" style="flex:1;justify-content:center;height:25px" onclick="setQuickRisk('MED')"><span class="dot MED"></span>中危</button>
+      <button class="btn" style="flex:1;justify-content:center;height:25px" onclick="setQuickRisk('LOW')"><span class="dot LOW"></span>低危</button>
+    </div>
+    <div style="border-top:1px solid var(--line);padding-top:7px;display:flex;flex-direction:column;gap:4px">
+      <div style="display:flex;align-items:center;gap:6px"><span style="width:42px;color:var(--ink-3)">严重 S</span><input type="range" min="1" max="10" id="rS" style="flex:1" oninput="slideSod()"/><b id="vS" style="width:16px;text-align:right">-</b></div>
+      <div style="display:flex;align-items:center;gap:6px"><span style="width:42px;color:var(--ink-3)">频度 O</span><input type="range" min="1" max="10" id="rO" style="flex:1" oninput="slideSod()"/><b id="vO" style="width:16px;text-align:right">-</b></div>
+      <div style="display:flex;align-items:center;gap:6px"><span style="width:42px;color:var(--ink-3)">探测 D</span><input type="range" min="1" max="10" id="rD" style="flex:1" oninput="slideSod()"/><b id="vD" style="width:16px;text-align:right">-</b></div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px">
+        <span id="rpnHint" style="font-size:11px;color:var(--ink-3)">手动等级</span>
+        <button class="link-act" onclick="clearSod()">清空打分</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="pop-mini" id="refPop">
+    <div style="display:flex;justify-content:space-between;font-weight:700;margin-bottom:5px">
+      <span id="refPopTitle">关联主数据</span>
+      <span style="cursor:pointer;color:var(--ink-4)" onclick="closePops()">✕</span>
+    </div>
+    <div id="refPopBody" style="color:var(--ink-2);line-height:1.55"></div>
+  </div>
+
+  <!-- ================= 弹窗 1：新增 / 编辑 FMEA 卡片 ================= -->
+  <div class="modal-bg" id="cardModal" onclick="if(event.target===this) closeCardModal()">
+    <div class="modal-card">
+      <div class="mc-head">
+        <span id="cmTitle">新增 FMEA 卡片</span>
+        <button class="link-act" onclick="closeCardModal()">✕</button>
+      </div>
+      <div class="mc-body">
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
+          <div>
+            <label class="f-lbl">类别</label>
+            <select class="f-sel" id="cmCat">
+              <option value="DFMEA">DFMEA</option>
+              <option value="PFMEA">PFMEA</option>
+              <option value="教训">历史教训</option>
+            </select>
+          </div>
+          <div>
+            <label class="f-lbl">风险等级</label>
+            <select class="f-sel" id="cmRisk">
+              <option value="HIGH">高危</option>
+              <option value="MED">中危</option>
+              <option value="LOW">低危</option>
+            </select>
+          </div>
+          <div>
+            <label class="f-lbl">S,O,D（选填）</label>
+            <input class="f-inp" id="cmSod" placeholder="如 9,4,4" />
+          </div>
+        </div>
+        <div>
+          <label class="f-lbl">失效模式（必填）</label>
+          <input class="f-inp" id="cmMode" placeholder="简明描述失效现象，如：柔轮齿根疲劳微裂纹" />
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <div>
+            <label class="f-lbl">失效机理</label>
+            <textarea class="f-txt" rows="2" id="cmMech" placeholder="物理或工艺根因..."></textarea>
+          </div>
+          <div>
+            <label class="f-lbl">失效后果</label>
+            <textarea class="f-txt" rows="2" id="cmEffect" placeholder="对系统/客户的影响..."></textarea>
+          </div>
+        </div>
+        <div>
+          <label class="f-lbl">防错规范与探测控制</label>
+          <input class="f-inp" id="cmCtrl" placeholder="如：强标圆角 R≥0.28 + 喷丸；200h正反转冲击台架" />
+        </div>
+        <div>
+          <label class="f-lbl">关联对象（输入短码 PRT-102 / SUP-008，或任意未建档名称逗号分隔）</label>
+          <input class="f-inp" id="cmRefs" placeholder="PRT-102, SUP-008, 三代柔轮(预研)" />
+        </div>
+        <div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+            <label class="f-lbl" style="margin:0">失效照片 / 标准对比（支持 Ctrl+V 直接贴图）</label>
+            <div style="display:flex;gap:5px">
+              <button class="btn" style="height:23px;font-size:11px" onclick="addSamplePhoto('NG')">+ 示例实拍(NG)</button>
+              <button class="btn" style="height:23px;font-size:11px" onclick="addSamplePhoto('OK')">+ 示例标准(OK)</button>
+              <button class="btn" style="height:23px;font-size:11px" onclick="uploadPhotoToModal()">上传图片</button>
+            </div>
+          </div>
+          <div id="cmPhotos" style="display:flex;gap:8px;flex-wrap:wrap;min-height:56px;padding:8px;border:1px dashed var(--line-strong);border-radius:7px;background:#f8fafc;align-items:center"></div>
+        </div>
+      </div>
+      <div class="mc-foot">
+        <button class="btn" onclick="closeCardModal()">取消</button>
+        <button class="btn btn-blue" onclick="saveCardModal()">保存</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= 弹窗 2：AI 录入 ================= -->
+  <div class="modal-bg" id="aiModal" onclick="if(event.target===this) closeAiModal()">
+    <div class="modal-card">
+      <div class="mc-head">
+        <span>AI 智能解析入画板</span>
+        <button class="link-act" onclick="closeAiModal()">✕</button>
+      </div>
+      <div class="mc-body">
+        <div style="display:flex;gap:6px">
+          <button class="btn" style="height:25px;font-size:11.5px" onclick="fillAiDemo(1)">示例 1：部件问题（归入定子节点）</button>
+          <button class="btn" style="height:25px;font-size:11.5px" onclick="fillAiDemo(2)">示例 2：接口干涉（自动建 4 字连线）</button>
+        </div>
+        <textarea class="f-txt" rows="4" id="aiText"></textarea>
+        <span style="font-size:11.5px;color:var(--ink-3)">支持粘贴微信反馈、8D 段落并按 Ctrl+V 附带故障照片，自动匹配已有节点或创建精简接口连线。</span>
+      </div>
+      <div class="mc-foot">
+        <button class="btn" onclick="closeAiModal()">取消</button>
+        <button class="btn btn-primary" onclick="runAiImport()">解析并置入画板</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= 弹窗 3：新建画板 ================= -->
+  <div class="modal-bg" id="boardModal" onclick="if(event.target===this) this.classList.remove('open')">
+    <div class="modal-card" style="width:380px">
+      <div class="mc-head">
+        <span>新建模块画板</span>
+        <button class="link-act" onclick="document.getElementById('boardModal').classList.remove('open')">✕</button>
+      </div>
+      <div class="mc-body">
+        <div>
+          <label class="f-lbl">所属系统分组</label>
+          <input class="f-inp" id="newBoardGroup" value="关节执行器系统" placeholder="如：关节执行器系统 / 电源BMS系统" />
+        </div>
+        <div>
+          <label class="f-lbl">模块画板名称</label>
+          <input class="f-inp" id="newBoardName" placeholder="如：直线推杆关节模组" />
+        </div>
+      </div>
+      <div class="mc-foot">
+        <button class="btn" onclick="document.getElementById('boardModal').classList.remove('open')">取消</button>
+        <button class="btn btn-blue" onclick="confirmNewBoard()">创建</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 高清灯箱 -->
+  <div class="modal-bg" id="lightbox" onclick="this.classList.remove('open')">
+    <div style="text-align:center">
+      <img id="lbImg" src="" style="max-width:86vw;max-height:80vh;border-radius:10px;box-shadow:var(--shadow-lg);background:#0f172a" />
+      <div id="lbCap" style="color:#f8fafc;margin-top:8px;font-size:12.5px;font-weight:500"></div>
+    </div>
+  </div>
+
+  <script>
+    const STORAGE_KEY = 'sqm_fmea_clean_studio_v4';
+
+    // ================= 1. 纯净几何工程图与显微实拍矢量图（无底部叠字，高清克制） =================
+    function svgBlueprint() {
+      const s = `<svg xmlns="http://www.w3.org/2000/svg" width="600" height="380" viewBox="0 0 600 380">
+        <rect width="600" height="380" fill="#0f172a"/>
+        <g stroke="#1e293b" stroke-width="1">
+          <line x1="0" y1="95" x2="600" y2="95"/><line x1="0" y1="285" x2="600" y2="285"/>
+          <line x1="150" y1="0" x2="150" y2="380"/><line x1="300" y1="0" x2="300" y2="380"/><line x1="450" y1="0" x2="450" y2="380"/>
+        </g>
+        <line x1="24" y1="190" x2="576" y2="190" stroke="#38bdf8" stroke-width="1" stroke-dasharray="8 4" opacity="0.65"/>
+        <!-- 壳体轮廓 -->
+        <rect x="64" y="54" width="472" height="272" rx="14" fill="#131c31" stroke="#475569" stroke-width="2"/>
+        <!-- 左：光电编码器与PCB -->
+        <rect x="88" y="84" width="22" height="212" rx="3" fill="#064e3b" stroke="#10b981" stroke-width="1.6"/>
+        <rect x="122" y="102" width="10" height="176" rx="2" fill="#1e3a8a" stroke="#60a5fa" stroke-width="1.6"/>
+        <text x="106" y="73" fill="#94a3b8" font-size="10.5" text-anchor="middle" font-family="sans-serif">码盘/PCB</text>
+        <!-- 中：无框电机定子绕组 -->
+        <rect x="162" y="76" width="128" height="62" rx="5" fill="#1e1b4b" stroke="#818cf8" stroke-width="1.8"/>
+        <rect x="162" y="242" width="128" height="62" rx="5" fill="#1e1b4b" stroke="#818cf8" stroke-width="1.8"/>
+        <path d="M172 84 L280 130 M172 130 L280 84 M172 250 L280 296 M172 296 L280 250" stroke="#6366f1" stroke-width="1.1" opacity="0.7"/>
+        <text x="226" y="67" fill="#94a3b8" font-size="10.5" text-anchor="middle" font-family="sans-serif">定子绕组</text>
+        <!-- 中空轴 -->
+        <rect x="120" y="158" width="366" height="64" fill="#0f172a" stroke="#64748b" stroke-width="1.8"/>
+        <!-- 右：谐波柔轮杯体 -->
+        <path d="M324 98 L422 98 L422 158 L346 158 L346 222 L422 222 L422 282 L324 282 Z" fill="rgba(37,99,235,0.18)" stroke="#38bdf8" stroke-width="2"/>
+        <text x="374" y="87" fill="#94a3b8" font-size="10.5" text-anchor="middle" font-family="sans-serif">谐波柔轮</text>
+        <!-- 右端：交叉滚子轴承与油封 -->
+        <rect x="448" y="84" width="60" height="66" rx="5" fill="#27272a" stroke="#fbbf24" stroke-width="1.8"/>
+        <rect x="448" y="230" width="60" height="66" rx="5" fill="#27272a" stroke="#fbbf24" stroke-width="1.8"/>
+        <circle cx="478" cy="117" r="15" fill="none" stroke="#fde68a" stroke-width="1.5"/>
+        <circle cx="478" cy="263" r="15" fill="none" stroke="#fde68a" stroke-width="1.5"/>
+        <text x="478" y="73" fill="#94a3b8" font-size="10.5" text-anchor="middle" font-family="sans-serif">轴承/油封</text>
+      </svg>`;
+      return 'data:image/svg+xml;utf8,' + encodeURIComponent(s);
+    }
+
+    function svgPhoto(kind) {
+      let body = '';
+      if (kind === 'CRACK') {
+        body = `<rect width="360" height="220" fill="#18181b"/>
+          <circle cx="180" cy="110" r="68" fill="#27272a" stroke="#52525b" stroke-width="1.5"/>
+          <path d="M126 142 Q165 135 178 96" fill="none" stroke="#94a3b8" stroke-width="3"/>
+          <path d="M176 98 L192 84 L198 96 L218 74 L232 80" fill="none" stroke="#f43f5e" stroke-width="3.2" stroke-linecap="round"/>
+          <circle cx="204" cy="86" r="22" fill="none" stroke="#fb7185" stroke-width="1.5" stroke-dasharray="4 3"/>`;
+      } else if (kind === 'OK_R') {
+        body = `<rect width="360" height="220" fill="#064e3b"/>
+          <path d="M88 158 L160 158 Q202 158 212 116 L278 116" fill="none" stroke="#34d399" stroke-width="4.5" stroke-linecap="round"/>
+          <circle cx="188" cy="134" r="24" fill="none" stroke="#fde047" stroke-width="1.6" stroke-dasharray="4 3"/>
+          <text x="236" y="156" fill="#a7f3d0" font-size="13" font-family="monospace" font-weight="bold">R ≥ 0.28</text>`;
+      } else if (kind === 'OIL') {
+        body = `<rect width="360" height="220" fill="#172554"/>
+          <circle cx="180" cy="110" r="64" fill="none" stroke="#60a5fa" stroke-width="2"/>
+          <circle cx="180" cy="110" r="34" fill="none" stroke="#3b82f6" stroke-width="8" stroke-dasharray="4 4"/>
+          <ellipse cx="206" cy="92" rx="22" ry="14" fill="rgba(251,146,60,0.78)"/>
+          <ellipse cx="162" cy="132" rx="16" ry="10" fill="rgba(251,146,60,0.65)"/>`;
+      } else {
+        body = `<rect width="360" height="220" fill="#1e1b4b"/>
+          <rect x="84" y="88" width="192" height="48" rx="6" fill="#312e81" stroke="#818cf8" stroke-width="1.8"/>
+          <path d="M150 88 L176 52 L214 52" fill="none" stroke="#f87171" stroke-width="3.5"/>
+          <circle cx="154" cy="84" r="14" fill="none" stroke="#fca5a5" stroke-width="1.8" stroke-dasharray="3 3"/>`;
+      }
+      return 'data:image/svg+xml;utf8,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="360" height="220" viewBox="0 0 360 220">${body}</svg>`);
+    }
+
+    // ================= 2. 主数据字典（非硬关联：短码展示，悬停/点击穿透全称） =================
+    const MASTER_DICT = {
+      'PRT-102': { type: 'part', code: 'PRT-102', name: '谐波减速器柔轮', spec: '图号 DRW-102 Rev.B · A类关键件' },
+      'PRT-205': { type: 'part', code: 'PRT-205', name: '无框力矩电机定子', spec: '图号 DRW-205 Rev.C · F级绝缘' },
+      'PRT-218': { type: 'part', code: 'PRT-218', name: '光电编码器组件', spec: '图号 DRW-218 Rev.A · 19-bit绝对值' },
+      'PRT-226': { type: 'part', code: 'PRT-226', name: '交叉滚子输出轴承', spec: '图号 DRW-226 Rev.B · P4级精度' },
+      'SUP-008': { type: 'supplier', code: 'SUP-008', name: '绿的谐波', spec: '核心量产供应商 · 质量评级 A (91.5分)' },
+      'SUP-015': { type: 'supplier', code: 'SUP-015', name: '步科电气', spec: '核心量产供应商 · 质量评级 A (89.0分)' },
+      'ISS-108': { type: 'issue', code: 'ISS-108', name: '老化20h柔轮齿根裂纹漏脂', spec: '8D状态：D6对策验证中 · 批次2610A' },
+      'ISS-112': { type: 'issue', code: 'ISS-112', name: '电机霍尔FPC焊点振动脱焊', spec: '8D状态：已结案固化 · EOL拦截' }
+    };
+
+    function parseRef(token) {
+      const s = token.trim();
+      if (!s) return null;
+      for (const [code, meta] of Object.entries(MASTER_DICT)) {
+        if (s.toUpperCase() === code || s.includes(meta.name) || s.toUpperCase().includes(code)) {
+          return { type: meta.type, code: meta.code, label: meta.name };
+        }
+      }
+      return { type: 'free', code: null, label: s };
+    }
+
+    // ================= 3. 出厂精选双画板示例数据（严格遵循短标签、高留白、不重叠） =================
+    function buildFactoryData() {
+      return {
+        actuator: {
+          id: 'actuator',
+          group: '关节执行器系统',
+          name: '二代旋转关节模组',
+          boards: [
+            {
+              id: 'bp-1',
+              title: '旋转关节总成剖面图',
+              x: 56, y: 86, w: 420, h: 288,
+              img: svgBlueprint(),
+              pins: [
+                {
+                  id: 'pin-1',
+                  num: 1,
+                  rx: 0.62, ry: 0.30,
+                  title: '柔轮齿根过渡圆角',
+                  sub: '剖面热点 #1 · 啮合高应力区',
+                  fmeas: [
+                    {
+                      id: 'fm-1',
+                      cat: 'DFMEA',
+                      risk: 'HIGH', s: 9, o: 4, d: 4,
+                      mode: '柔轮齿根交变疲劳微裂纹',
+                      mech: '齿根过渡圆角仅标 R0.15 产生 2.4 倍应力集中，峰值冲击下 20h 萌生晶界裂纹',
+                      effect: '关节异响，最终柔轮断裂卡死',
+                      ctrl: '图纸强标齿根圆角 R≥0.28 + 微粒喷丸强化；DV 200h 正反转冲击寿命台架',
+                      photos: [
+                        { tag: 'NG', url: svgPhoto('CRACK'), cap: '200x 金相齿根裂纹实拍' },
+                        { tag: 'OK', url: svgPhoto('OK_R'), cap: 'R≥0.28 应力下降 34%' }
+                      ],
+                      refs: [
+                        { type: 'part', code: 'PRT-102', label: '谐波减速器柔轮' },
+                        { type: 'supplier', code: 'SUP-008', label: '绿的谐波' },
+                        { type: 'issue', code: 'ISS-108', label: '老化20h柔轮齿根裂纹漏脂' },
+                        { type: 'free', code: null, label: '三代轻量化柔轮' }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  id: 'pin-2',
+                  num: 2,
+                  rx: 0.80, ry: 0.72,
+                  title: '输出端骨架油封唇口',
+                  sub: '剖面热点 #2 · 动态密封面',
+                  fmeas: [
+                    {
+                      id: 'fm-2',
+                      cat: 'PFMEA',
+                      risk: 'MED', s: 6, o: 3, d: 4,
+                      mode: '盲压装配刮伤油封主唇口渗脂',
+                      mech: '轴肩倒角仅 C0.3 存在毛刺，无尼龙引导套筒压装时切伤氟胶唇边',
+                      effect: '长期运行端盖挂油渍，防尘失效',
+                      ctrl: '轴肩改 15° 抛光导入角 + 压装工装必配尼龙导向套',
+                      photos: [{ tag: 'NG', url: svgPhoto('OIL'), cap: '唇口刮伤渗脂微距图' }],
+                      refs: [{ type: 'part', code: 'PRT-226', label: '交叉滚子输出轴承' }]
+                    }
+                  ]
+                }
+              ]
+            }
+          ],
+          nodes: [
+            {
+              id: 'nd-flex',
+              title: '谐波柔轮总成',
+              sub: 'PRT-102 · SUP-008',
+              x: 590, y: 66,
+              fmeas: [
+                {
+                  id: 'fm-3',
+                  cat: 'DFMEA',
+                  risk: 'HIGH', s: 8, o: 4, d: 4,
+                  mode: '柔轮杯底法兰螺钉微动磨损松脱',
+                  mech: '高低温交变下钢-铝热膨胀差致预紧力衰减 28%，未点涂防松胶',
+                  effect: '零位漂移 > 0.08°，重复定位精度超差',
+                  ctrl: '12.9级滚花防松螺钉 + 乐泰243点胶扭矩角度双监控',
+                  photos: [{ tag: 'NG', url: svgPhoto('CRACK'), cap: '螺钉孔周微动黑粉' }],
+                  refs: [
+                    { type: 'part', code: 'PRT-102', label: '谐波减速器柔轮' },
+                    { type: 'supplier', code: 'SUP-008', label: '绿的谐波' }
+                  ]
+                }
+              ]
+            },
+            {
+              id: 'nd-stator',
+              title: '无框电机定子',
+              sub: 'PRT-205 · SUP-015',
+              x: 590, y: 262,
+              fmeas: [
+                {
+                  id: 'fm-4',
+                  cat: '教训',
+                  risk: 'HIGH', s: 8, o: 4, d: 3,
+                  mode: '定子引出线根部高温绝缘开裂打火',
+                  mech: '环氧灌封胶硬边界与引线弯折处重合，热胀冷缩剪切割裂漆皮',
+                  effect: '对壳耐压击穿停机',
+                  ctrl: '引线套 FEP 铁氟龙护管深入胶面 ≥ 5mm + 硅橡胶应力缓冲',
+                  photos: [
+                    { tag: 'NG', url: svgPhoto('WIRE'), cap: '引线根部开裂击穿点' },
+                    { tag: 'OK', url: svgPhoto('OK_R'), cap: '护管深入胶面≥5mm规范' }
+                  ],
+                  refs: [
+                    { type: 'part', code: 'PRT-205', label: '无框力矩电机定子' },
+                    { type: 'supplier', code: 'SUP-015', label: '步科电气' },
+                    { type: 'issue', code: 'ISS-112', label: '电机霍尔FPC焊点振动脱焊' }
+                  ]
+                }
+              ]
+            },
+            {
+              id: 'nd-enc',
+              title: '光电编码器板',
+              sub: 'PRT-218 · 电控组件',
+              x: 900, y: 164,
+              fmeas: [
+                {
+                  id: 'fm-5',
+                  cat: 'DFMEA',
+                  risk: 'MED', s: null, o: null, d: null,
+                  mode: '码盘背胶湿热蠕变翘曲擦碰读数头',
+                  mech: '纯双面胶在 85℃/85%RH 下蠕变翘起 0.25mm',
+                  effect: 'ABZ 信号丢步报过流故障',
+                  ctrl: '禁用纯背胶，改激光点焊金属码盘或机械压圈固定',
+                  photos: [],
+                  refs: [
+                    { type: 'part', code: 'PRT-218', label: '光电编码器组件' },
+                    { type: 'free', code: null, label: '自研双编板样品' }
+                  ]
+                }
+              ]
+            }
+          ],
+          edges: [
+            {
+              id: 'ed-0',
+              from: 'bp-1',
+              to: 'nd-flex',
+              label: '剖面映射',
+              sub: '结构拆解关联',
+              fmeas: []
+            },
+            {
+              id: 'ed-1',
+              from: 'nd-flex',
+              to: 'nd-enc',
+              label: '油脂飞溅',
+              sub: '柔轮腔 ➔ 编码器腔密封接口',
+              fmeas: [
+                {
+                  id: 'fm-6',
+                  cat: 'DFMEA',
+                  risk: 'HIGH', s: 9, o: 3, d: 4,
+                  mode: '高速离心甩出润滑油雾污染光栅码盘',
+                  mech: '两腔室中空轴通道缺迷宫挡油环，80h 连续运转基础油析出飞溅遮挡光路',
+                  effect: '读数头幅值衰减失步，关节飞车风险',
+                  ctrl: '中空轴增设氟橡胶 V 型甩油环 + 改密封玻璃码盘或磁编',
+                  photos: [{ tag: 'NG', url: svgPhoto('OIL'), cap: '光栅表面油膜污染实拍' }],
+                  refs: [
+                    { type: 'part', code: 'PRT-102', label: '谐波减速器柔轮' },
+                    { type: 'part', code: 'PRT-218', label: '光电编码器组件' },
+                    { type: 'issue', code: 'ISS-108', label: '老化20h柔轮齿根裂纹漏脂' }
+                  ]
+                }
+              ]
+            },
+            {
+              id: 'ed-2',
+              from: 'nd-stator',
+              to: 'nd-enc',
+              label: '振动拉扯',
+              sub: '定子 ➔ 驱动板 FPC 线束接口',
+              fmeas: [
+                {
+                  id: 'fm-7',
+                  cat: '教训',
+                  risk: 'HIGH', s: 8, o: 3, d: 4,
+                  mode: '高频共振通过短线束拉裂驱动板焊盘',
+                  mech: '霍尔 FPC 未留 S 弯余量且焊盘根部无 UV 胶固封，疲劳撕裂铜箔',
+                  effect: '电机换相丢失锁死',
+                  ctrl: '线束强制预留 ≥8mm S 型余量 + 焊盘 100% 结构 UV 胶包封',
+                  photos: [{ tag: 'NG', url: svgPhoto('WIRE'), cap: 'FPC 焊盘根部撕裂断口' }],
+                  refs: [
+                    { type: 'part', code: 'PRT-205', label: '无框力矩电机定子' },
+                    { type: 'issue', code: 'ISS-112', label: '电机霍尔FPC焊点振动脱焊' }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+
+        dexterous_hand: {
+          id: 'dexterous_hand',
+          group: '灵巧手与末端系统',
+          name: '五指灵巧手总成',
+          boards: [],
+          nodes: [
+            {
+              id: 'dh-1', title: '空心杯微电机', sub: 'PRT-501 · 电刷换向', x: 110, y: 140,
+              fmeas: [{
+                id: 'dhf-1', cat: 'DFMEA', risk: 'MED', s: 7, o: 3, d: 3,
+                mode: '堵转过流致贵金属电刷烧蚀',
+                mech: '抓握硬物末端未设电流软限幅，瞬时热功率超电刷熔点',
+                effect: '手指驱动失效',
+                ctrl: '固件设定 1.2A 持续 >150ms 自动退力保护',
+                photos: [],
+                refs: [{ type: 'free', code: null, label: '8mm空心杯样品' }]
+              }]
+            },
+            {
+              id: 'dh-2', title: '高分子牵引腱绳', sub: 'PRT-508 · UHMWPE', x: 430, y: 140,
+              fmeas: [{
+                id: 'dhf-2', cat: 'DFMEA', risk: 'HIGH', s: 8, o: 4, d: 4,
+                mode: '指节过绳孔锐边割断腱绳起毛断裂',
+                mech: '铝合金指节穿线孔出口折角 65° 且表面粗糙度 Ra3.2 偏高',
+                effect: '手指突发失张力松脱',
+                ctrl: '穿线孔必镶嵌陶瓷导套 (Ra≤0.2) + 最小弯曲半径 ≥4mm',
+                photos: [{ tag: 'NG', url: svgPhoto('CRACK'), cap: '2万次弯折腱绳起毛断丝' }],
+                refs: [{ type: 'free', code: null, label: 'ダイニーマ腱绳0.8mm' }]
+              }]
+            }
+          ],
+          edges: [
+            { id: 'dhe-1', from: 'dh-1', to: 'dh-2', label: '绞盘张紧', sub: '绕线轮 ➔ 腱绳防脱槽配合', fmeas: [] }
+          ]
+        },
+
+        eol_line: {
+          id: 'eol_line',
+          group: '制造与测试产线',
+          name: '关节总装EOL产线',
+          boards: [],
+          nodes: [
+            {
+              id: 'op-10', title: 'OP10 真空灌封', sub: '特殊过程 · 负压监控', x: 100, y: 150,
+              fmeas: [{
+                id: 'pf-1', cat: 'PFMEA', risk: 'HIGH', s: 8, o: 3, d: 4,
+                mode: '脱泡负压不足致绕组槽底残留气孔',
+                mech: '真空度未达 -98kPa 提前破真空，底部死角窝气导致局部放电',
+                effect: '耐压击穿或长期温升烧毁',
+                ctrl: 'PLC 联锁真空计：<-98kPa 保压满 8min 方可解锁出腔',
+                photos: [{ tag: 'NG', url: svgPhoto('CRACK'), cap: '定子切片槽底 1.2mm 气孔' }],
+                refs: [{ type: 'part', code: 'PRT-205', label: '无框力矩电机定子' }]
+              }]
+            },
+            {
+              id: 'op-20', title: 'OP20 伺服压装', sub: '防错工位 · 位移压力窗', x: 400, y: 150,
+              fmeas: [{
+                id: 'pf-2', cat: 'PFMEA', risk: 'MED', s: 6, o: 3, d: 3,
+                mode: '轴承压装偏斜致空载启动力矩超标',
+                mech: '定位销磨损超 0.05mm，压入初期微卡滞刮伤内孔',
+                effect: '空载电流偏大 25%，低速抖动',
+                ctrl: '伺服电缸设定「压力-位移拐点包络窗」超限自动锁机',
+                photos: [],
+                refs: [{ type: 'part', code: 'PRT-226', label: '交叉滚子输出轴承' }]
+              }]
+            },
+            {
+              id: 'op-30', title: 'OP30 荧光点胶', sub: '360° UV 视觉闭环', x: 700, y: 150,
+              fmeas: [{
+                id: 'pf-3', cat: 'PFMEA', risk: 'MED', s: 8, o: 2, d: 3,
+                mode: '螺纹胶气泡断流漏涂流入下道',
+                mech: '胶管末端微气泡致断胶，透明胶肉眼漏检',
+                effect: '耐久振动螺钉松退',
+                ctrl: '采用 UV 荧光螺纹胶 + 紫外相机 360° 胶道连续性必检',
+                photos: [{ tag: 'OK', url: svgPhoto('OK_R'), cap: 'UV 视觉断胶自动拦截' }],
+                refs: [{ type: 'part', code: 'PRT-102', label: '谐波减速器柔轮' }]
+              }]
+            }
+          ],
+          edges: [
+            { id: 'pe-1', from: 'op-10', to: 'op-20', label: '引线防护', sub: '周转托盘防折弯', fmeas: [] },
+            {
+              id: 'pe-2', from: 'op-20', to: 'op-30', label: '除油流转', sub: '油膜阻聚风险接口',
+              fmeas: [{
+                id: 'pf-4', cat: 'PFMEA', risk: 'HIGH', s: 8, o: 3, d: 4,
+                mode: '压装防锈油带入螺纹孔致厌氧胶不固化',
+                mech: '矿物油膜隔绝金属离子催化反应，72h 仍呈液态',
+                effect: '法兰螺钉批量松脱',
+                ctrl: '流转接口强制增加等离子/超声波脱脂烘干工步',
+                photos: [{ tag: 'NG', url: svgPhoto('OIL'), cap: '螺纹孔残油致胶液态未固' }],
+                refs: [{ type: 'part', code: 'PRT-102', label: '谐波减速器柔轮' }, { type: 'free', code: null, label: '苏州二线#03工位' }]
+              }]
+            }
+          ]
+        }
+      };
+    }
+
+    // ================= 4. 状态管理、本地持久化与撤销栈 =================
+    let db = loadDb();
+    let curBoardId = Object.keys(db)[0] || 'actuator';
+    let curView = 'canvas';
+    let curTool = 'select';
+    let highOnly = false;
+    let panX = 24, panY = 24, zoom = 1;
+
+    // 默认选中剖面图上的 1 号高危热点，打开页面第一眼即见「剖面图 + 极简节点连线 + 右侧高清照片机理悬浮卡」完整闭环！
+    let sel = { kind: 'pin', id: 'pin-1', boardId: 'bp-1' };
+
+    let undoStack = [];
+    let redoStack = [];
+    let drag = null;
+    let popCardTarget = null;
+    let editingCardId = null;
+    let modalPhotos = [];
+    let uploadCb = null;
+
+    function loadDb() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (parsed && Object.keys(parsed).length) return parsed;
+        }
+      } catch (_) {}
+      return buildFactoryData();
+    }
+
+    function saveDb(recordUndo = true) {
+      if (recordUndo) {
+        undoStack.push(JSON.stringify(db));
+        if (undoStack.length > 30) undoStack.shift();
+        redoStack = [];
+      }
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(db)); } catch (_) {}
+      syncUndoBtns();
+    }
+
+    function snapshotBeforeMutate() {
+      undoStack.push(JSON.stringify(db));
+      if (undoStack.length > 30) undoStack.shift();
+      redoStack = [];
+      syncUndoBtns();
+    }
+
+    function persistOnly() {
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(db)); } catch (_) {}
+    }
+
+    function undo() {
+      if (!undoStack.length) return;
+      redoStack.push(JSON.stringify(db));
+      db = JSON.parse(undoStack.pop());
+      if (!db[curBoardId]) curBoardId = Object.keys(db)[0];
+      persistOnly();
+      syncUndoBtns();
+      renderAll();
+      toast('已撤销');
+    }
+
+    function redo() {
+      if (!redoStack.length) return;
+      undoStack.push(JSON.stringify(db));
+      db = JSON.parse(redoStack.pop());
+      persistOnly();
+      syncUndoBtns();
+      renderAll();
+      toast('已重做');
+    }
+
+    function syncUndoBtns() {
+      document.getElementById('btnUndo').disabled = !undoStack.length;
+      document.getElementById('btnRedo').disabled = !redoStack.length;
+    }
+
+    function B() { return db[curBoardId]; }
+
+    function maxRisk(fmeas) {
+      if (!fmeas || !fmeas.length) return 'LOW';
+      if (fmeas.some(f => f.risk === 'HIGH')) return 'HIGH';
+      if (fmeas.some(f => f.risk === 'MED')) return 'MED';
+      return 'LOW';
+    }
+
+    function riskText(r) { return r === 'HIGH' ? '高危' : r === 'MED' ? '中危' : '低危'; }
+
+    // ================= 5. 左侧模块目录与画板大纲 + 核心画布渲染 =================
+    function toggleModuleNav() {
+      document.getElementById('moduleNav').classList.toggle('collapsed');
+    }
+
+    function boardAllFmeas(b) {
+      return [
+        ...b.boards.flatMap(bp => bp.pins.flatMap(p => p.fmeas)),
+        ...b.nodes.flatMap(nd => nd.fmeas),
+        ...b.edges.flatMap(ed => ed.fmeas)
+      ];
+    }
+
+    function renderModuleNav() {
+      const cur = B();
+      // 1. 顶栏面包屑
+      document.getElementById('topCrumb').innerHTML =
+        `<span>${esc(cur.group || '未分组系统')}</span> <span>/</span> <b>${esc(cur.name)}</b>`;
+
+      // 2. 上半区：按系统分组的模块画板树
+      const groups = {};
+      Object.values(db).forEach(b => {
+        const g = b.group || '其他模块';
+        if (!groups[g]) groups[g] = [];
+        groups[g].push(b);
+      });
+
+      document.getElementById('navBoardTree').innerHTML = Object.entries(groups).map(([gName, list]) => {
+        const rows = list.map(b => {
+          const allF = boardAllFmeas(b);
+          const r = maxRisk(allF);
+          const act = b.id === curBoardId ? 'active' : '';
+          return `<div class="mn-row ${act}" onclick="onSwitchBoard('${escAttr(b.id)}')">
+            <div class="mn-row-left">
+              <svg class="ico" style="width:13px;height:13px;opacity:0.75" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/></svg>
+              <span class="txt">${esc(b.name)}</span>
+            </div>
+            <span class="mn-cnt">${allF.length ? `<span class="dot ${r}"></span>${allF.length}` : ''}</span>
+          </div>`;
+        }).join('');
+        return `<div class="mn-group-title">${esc(gName)}</div>${rows}`;
+      }).join('');
+
+      // 3. 下半区：当前画板大纲（底图热点 / 模块节点 / 连线接口，点击平滑定位！）
+      const pins = cur.boards.flatMap(bp => bp.pins.map(p => ({ p, bpId: bp.id })));
+      const totalItems = pins.length + cur.nodes.length + cur.edges.length;
+      document.getElementById('navOutlineCount').textContent = totalItems || '';
+
+      let outHtml = '';
+      if (pins.length) {
+        outHtml += `<div class="mn-group-title">底图热点</div>` + pins.map(({ p, bpId }) => {
+          const isAct = sel && sel.kind === 'pin' && sel.id === p.id ? 'active' : '';
+          const r = maxRisk(p.fmeas);
+          return `<div class="mn-row ${isAct}" onclick="focusOutlineItem('pin','${p.id}','${bpId}')">
+            <div class="mn-row-left"><span style="font-size:10.5px;font-weight:700;color:var(--ink-4)">#${p.num}</span><span class="txt">${esc(p.title)}</span></div>
+            <span class="mn-cnt">${p.fmeas.length ? `<span class="dot ${r}"></span>${p.fmeas.length}` : ''}</span>
+          </div>`;
+        }).join('');
+      }
+      if (cur.nodes.length) {
+        outHtml += `<div class="mn-group-title">模块节点</div>` + cur.nodes.map(nd => {
+          const isAct = sel && sel.kind === 'node' && sel.id === nd.id ? 'active' : '';
+          const r = maxRisk(nd.fmeas);
+          return `<div class="mn-row ${isAct}" onclick="focusOutlineItem('node','${nd.id}')">
+            <div class="mn-row-left"><span class="txt">${esc(nd.title)}</span></div>
+            <span class="mn-cnt">${nd.fmeas.length ? `<span class="dot ${r}"></span>${nd.fmeas.length}` : ''}</span>
+          </div>`;
+        }).join('');
+      }
+      if (cur.edges.length) {
+        outHtml += `<div class="mn-group-title">配合与传递接口</div>` + cur.edges.map(ed => {
+          const isAct = sel && sel.kind === 'edge' && sel.id === ed.id ? 'active' : '';
+          const r = maxRisk(ed.fmeas);
+          return `<div class="mn-row ${isAct}" onclick="focusOutlineItem('edge','${ed.id}')">
+            <div class="mn-row-left"><span class="txt">${esc(ed.label)}</span></div>
+            <span class="mn-cnt">${ed.fmeas.length ? `<span class="dot ${r}"></span>${ed.fmeas.length}` : ''}</span>
+          </div>`;
+        }).join('');
+      }
+
+      document.getElementById('navOutlineList').innerHTML = outHtml || `<div style="padding:12px 8px;font-size:11.5px;color:var(--ink-4)">画板暂无元素</div>`;
+    }
+
+    function focusOutlineItem(kind, id, bpId) {
+      if (curView !== 'canvas') switchView('canvas');
+      let box = null;
+      if (kind === 'pin') box = getBox(bpId);
+      else if (kind === 'node') box = getBox(id);
+      else if (kind === 'edge') {
+        const ed = B().edges.find(x => x.id === id);
+        if (ed) box = getBox(ed.from);
+      }
+      if (box) {
+        const usableW = Math.max(320, stageEl.clientWidth - 388);
+        const usableH = stageEl.clientHeight;
+        panX = Math.round(usableW / 2 - (box.x + box.w / 2) * zoom);
+        panY = Math.round(usableH / 2 - (box.y + box.h / 2) * zoom);
+      }
+      selectObj(kind, id, bpId);
+    }
+
+    function applyTransform() {
+      document.getElementById('world').style.transform = `translate(${panX}px, ${panY}px) scale(${zoom})`;
+      document.getElementById('zoomVal').textContent = Math.round(zoom * 100) + '%';
+    }
+
+    function getBox(id) {
+      const b = B();
+      const nd = b.nodes.find(x => x.id === id);
+      if (nd) return { x: nd.x, y: nd.y, w: 184, h: 88 };
+      const bp = b.boards.find(x => x.id === id);
+      if (bp) return { x: bp.x, y: bp.y, w: bp.w, h: bp.h };
+      return null;
+    }
+
+    function matchesFilter(fmeas, textBlob) {
+      const kw = document.getElementById('kwInput').value.trim().toLowerCase();
+      if (highOnly && maxRisk(fmeas) !== 'HIGH') return false;
+      if (kw && !textBlob.toLowerCase().includes(kw)) return false;
+      return true;
+    }
+
+    function renderCanvas() {
+      applyTransform();
+      const b = B();
+
+      // 1. 渲染图纸底板与圆章热点
+      document.getElementById('boardsLayer').innerHTML = b.boards.map(bp => {
+        const allPinFmeas = bp.pins.flatMap(p => p.fmeas);
+        const dim = !matchesFilter(allPinFmeas, JSON.stringify(bp)) && (highOnly || document.getElementById('kwInput').value.trim()) ? 'dimmed' : '';
+        const isSel = sel && sel.kind === 'board' && sel.id === bp.id;
+
+        const pinsHtml = bp.pins.map(p => {
+          const r = maxRisk(p.fmeas);
+          const pSel = sel && sel.kind === 'pin' && sel.id === p.id;
+          return `<div class="pin-marker ${r} ${pSel ? 'selected' : ''}"
+            style="left:${p.rx * 100}%;top:${p.ry * 100}%"
+            title="${escAttr(p.title)}（${p.fmeas.length} 项）"
+            onmousedown="startPinDrag(event,'${bp.id}','${p.id}')"
+            onclick="event.stopPropagation();selectObj('pin','${p.id}','${bp.id}')">${p.num}</div>`;
+        }).join('');
+
+        return `<div class="board-frame ${isSel ? 'selected' : ''} ${dim}" id="dom-${bp.id}"
+          style="left:${bp.x}px;top:${bp.y}px;width:${bp.w}px;height:${bp.h}px"
+          onclick="event.stopPropagation();onBoardClick(event,'${bp.id}')">
+          <div class="bf-bar" onmousedown="startBoxDrag(event,'board','${bp.id}')">
+            <span>${esc(bp.title)}</span>
+            <span style="font-size:10.5px;color:#94a3b8">${curTool === 'pin' ? '点击画面落点' : bp.pins.length + ' 热点'}</span>
+          </div>
+          <div class="bf-canvas" id="bfc-${bp.id}">
+            <img src="${bp.img}" />
+            ${pinsHtml}
+          </div>
+          <div class="port r" title="拖拽连线" onmousedown="startLink(event,'${bp.id}')"></div>
+          <div class="resize-grip" title="拖拽缩放底图" onmousedown="startResize(event,'${bp.id}')"></div>
+        </div>`;
+      }).join('');
+
+      // 2. 渲染极简部件/工序卡片（仅名称 + 短码 + 风险圆点 + 图片数）
+      document.getElementById('nodesLayer').innerHTML = b.nodes.map(nd => {
+        const r = maxRisk(nd.fmeas);
+        const isSel = sel && sel.kind === 'node' && sel.id === nd.id;
+        const dim = !matchesFilter(nd.fmeas, JSON.stringify(nd)) ? 'dimmed' : '';
+        const photoCnt = nd.fmeas.reduce((s, f) => s + (f.photos ? f.photos.length : 0), 0);
+        const riskSummary = nd.fmeas.length
+          ? `<span class="nc-risk-pill"><span class="dot ${r}"></span>${nd.fmeas.length} 项</span>`
+          : `<span style="color:var(--ink-4)">待补充</span>`;
+
+        return `<div class="node-card ${isSel ? 'selected' : ''} ${dim}" id="dom-${nd.id}"
+          style="left:${nd.x}px;top:${nd.y}px"
+          onmousedown="startBoxDrag(event,'node','${nd.id}')"
+          onclick="event.stopPropagation();selectObj('node','${nd.id}')">
+          <div class="nc-top">
+            <span class="nc-name">${esc(nd.title)}</span>
+            ${nd.fmeas.length ? `<span class="dot ${r}"></span>` : ''}
+          </div>
+          <div class="nc-code">${esc(nd.sub || '未绑短码')}</div>
+          <div class="nc-meta">
+            ${riskSummary}
+            <span>${photoCnt ? photoCnt + ' 图' : ''}</span>
+          </div>
+          <div class="port l" onmousedown="startLink(event,'${nd.id}')"></div>
+          <div class="port r" onmousedown="startLink(event,'${nd.id}')"></div>
+          <div class="port t" onmousedown="startLink(event,'${nd.id}')"></div>
+          <div class="port b" onmousedown="startLink(event,'${nd.id}')"></div>
+        </div>`;
+      }).join('');
+
+      renderEdges();
+      renderFloatingPanel();
+    }
+
+    function calcCurve(a, b) {
+      const ax = a.x + a.w / 2, ay = a.y + a.h / 2;
+      const bx = b.x + b.w / 2, by = b.y + b.h / 2;
+      const dx = bx - ax, dy = by - ay;
+      let sx, sy, tx, ty, c1x, c1y, c2x, c2y;
+      if (Math.abs(dx) >= Math.abs(dy) * 0.7) {
+        sx = dx >= 0 ? a.x + a.w : a.x; sy = ay;
+        tx = dx >= 0 ? b.x : b.x + b.w; ty = by;
+        const k = Math.max(44, Math.abs(tx - sx) * 0.45);
+        c1x = sx + (dx >= 0 ? k : -k); c1y = sy;
+        c2x = tx + (dx >= 0 ? -k : k); c2y = ty;
+      } else {
+        sx = ax; sy = dy >= 0 ? a.y + a.h : a.y;
+        tx = bx; ty = dy >= 0 ? b.y : b.y + b.h;
+        const k = Math.max(44, Math.abs(ty - sy) * 0.45);
+        c1x = sx; c1y = sy + (dy >= 0 ? k : -k);
+        c2x = tx; c2y = ty + (dy >= 0 ? -k : k);
+      }
+      const mx = 0.125 * sx + 0.375 * c1x + 0.375 * c2x + 0.125 * tx;
+      const my = 0.125 * sy + 0.375 * c1y + 0.375 * c2y + 0.125 * ty;
+      return { d: `M ${sx} ${sy} C ${c1x} ${c1y}, ${c2x} ${c2y}, ${tx} ${ty}`, mx, my };
+    }
+
+    function renderEdges(tempPath) {
+      const svg = document.getElementById('edgesSvg');
+      const lbls = document.getElementById('edgeLabels');
+      const defs = svg.querySelector('defs').outerHTML;
+      let paths = '', tags = '';
+
+      B().edges.forEach(ed => {
+        const ba = getBox(ed.from), bb = getBox(ed.to);
+        if (!ba || !bb) return;
+        const { d, mx, my } = calcCurve(ba, bb);
+        const r = maxRisk(ed.fmeas);
+        const hasRisk = ed.fmeas && ed.fmeas.length > 0;
+        const isSel = sel && sel.kind === 'edge' && sel.id === ed.id;
+        const dim = !matchesFilter(ed.fmeas, JSON.stringify(ed)) ? 'dimmed' : '';
+
+        const stroke = isSel ? '#2563eb' : (!hasRisk ? '#cbd5e1' : r === 'HIGH' ? '#e11d48' : r === 'MED' ? '#d97706' : '#64748b');
+        const marker = !hasRisk ? 'url(#arrDef)' : r === 'HIGH' ? 'url(#arrHigh)' : r === 'MED' ? 'url(#arrMed)' : 'url(#arrDef)';
+
+        paths += `<g class="edge-group ${isSel ? 'selected' : ''} ${dim}">
+          <path class="edge-hit" d="${d}" onclick="event.stopPropagation();selectObj('edge','${ed.id}')" />
+          <path class="edge-line" d="${d}" stroke="${stroke}" ${!hasRisk ? 'stroke-dasharray="4 4"' : ''} marker-end="${marker}" />
+        </g>`;
+
+        // 强制最多显示 5 个字，杜绝长标签遮挡！
+        const shortText = (ed.label || '接口').slice(0, 5);
+        tags += `<div class="edge-tag ${isSel ? 'selected' : ''} ${dim}"
+          style="left:${mx}px;top:${my}px"
+          title="${escAttr(ed.label)}（点击查看接口 FMEA）"
+          onclick="event.stopPropagation();selectObj('edge','${ed.id}')">
+          ${hasRisk ? `<span class="dot ${r}"></span>` : ''}${esc(shortText)}
+        </div>`;
+      });
+
+      if (tempPath) {
+        paths += `<path d="${tempPath}" fill="none" stroke="#2563eb" stroke-width="2" stroke-dasharray="5 4" marker-end="url(#arrDef)" />`;
+      }
+      svg.innerHTML = defs + paths;
+      lbls.innerHTML = tags;
+    }
+
+    // ================= 6. 右侧按需悬浮面板（368px）渲染 =================
+    function getActiveContext() {
+      if (!sel) return null;
+      const b = B();
+      if (sel.kind === 'node') {
+        const nd = b.nodes.find(x => x.id === sel.id);
+        return nd ? { kindLabel: '部件 / 工序节点', obj: nd, fmeas: nd.fmeas } : null;
+      }
+      if (sel.kind === 'edge') {
+        const ed = b.edges.find(x => x.id === sel.id);
+        return ed ? { kindLabel: '连线接口 FMEA', obj: ed, isEdge: true, fmeas: ed.fmeas } : null;
+      }
+      if (sel.kind === 'pin') {
+        for (const bp of b.boards) {
+          const p = bp.pins.find(x => x.id === sel.id);
+          if (p) return { kindLabel: `底图热点 #${p.num}`, obj: p, fmeas: p.fmeas };
+        }
+      }
+      if (sel.kind === 'board') {
+        const bp = b.boards.find(x => x.id === sel.id);
+        if (bp) return { kindLabel: '图纸底板', obj: bp, isBoard: true, fmeas: bp.pins.flatMap(p => p.fmeas) };
+      }
+      return null;
+    }
+
+    function renderCardItemHtml(f, locateMeta) {
+      const hasSod = f.s && f.o && f.d;
+      const rpnTxt = hasSod ? ` · ${f.s * f.o * f.d}` : '';
+
+      const photosHtml = (f.photos && f.photos.length)
+        ? `<div class="fc-photos">
+            ${f.photos.map(p => `
+              <div class="fc-photo-item" onclick="openLightbox('${p.url}','${escAttr(p.cap || f.mode)}')">
+                <span class="fc-photo-badge ${p.tag || 'NG'}">${p.tag || 'NG'}</span>
+                <img src="${p.url}" />
+                <div class="fc-photo-cap">${esc(p.cap || f.mode)}</div>
+              </div>
+            `).join('')}
+          </div>`
+        : '';
+
+      // 短码软标签：有 code 只显短码（如 PRT-102），悬停显全名，点击弹穿透快照！
+      const chipsHtml = (f.refs || []).map((r, ri) => {
+        const shortCode = r.code || (r.label.length > 7 ? r.label.slice(0, 6) + '…' : r.label);
+        const fullTip = r.code ? `${r.code} · ${r.label}` : `自由标签：${r.label}`;
+        return `<span class="s-chip ${r.type === 'free' ? 'free' : ''}"
+          title="${escAttr(fullTip)}"
+          onclick="event.stopPropagation();openRefSnap(event,'${f.id}',${ri})">${esc(shortCode)}</span>`;
+      }).join('');
+
+      return `<div class="fmea-card">
+        ${photosHtml}
+        <div class="fc-main">
+          <div class="fc-head">
+            <div class="fc-mode">${esc(f.mode)}</div>
+            <span class="r-pill ${f.risk}" onclick="openRiskPop(event,'${f.id}')" title="点击调整等级或 S·O·D">
+              <span class="dot ${f.risk}"></span>${riskText(f.risk)}${rpnTxt}
+            </span>
+          </div>
+          ${f.mech ? `<div class="fc-row"><span class="k">机理</span>${esc(f.mech)}</div>` : ''}
+          ${f.effect ? `<div class="fc-row"><span class="k">后果</span>${esc(f.effect)}</div>` : ''}
+          ${f.ctrl ? `<div class="fc-row"><span class="k">防错</span>${esc(f.ctrl)}</div>` : ''}
+          <div class="fc-foot">
+            <div class="short-tags">${chipsHtml}</div>
+            <div style="display:flex;gap:4px;margin-left:auto">
+              ${locateMeta
+                ? `<button class="link-act" style="color:var(--accent);font-weight:600" onclick="locateOnCanvas('${locateMeta.boardKey}','${locateMeta.kind}','${locateMeta.id}')">定位画板 ↗</button>`
+                : `<button class="link-act" onclick="openCardModal('${f.id}')">编辑</button>
+                   <button class="link-act" onclick="deleteFmeaCard('${f.id}')">删除</button>`
+              }
+            </div>
+          </div>
+        </div>
+      </div>`;
+    }
+
+    function renderFloatingPanel() {
+      const panel = document.getElementById('floatPanel');
+      const zoomBox = document.getElementById('cornerZoom');
+      const ctx = getActiveContext();
+
+      if (!ctx) {
+        panel.classList.remove('open');
+        zoomBox.classList.remove('shifted');
+        return;
+      }
+
+      panel.classList.add('open');
+      zoomBox.classList.add('shifted');
+
+      document.getElementById('fpKind').textContent = ctx.kindLabel;
+      document.getElementById('fpTitle').value = ctx.isEdge ? ctx.obj.label : ctx.obj.title;
+      document.getElementById('fpSub').value = ctx.obj.sub || '';
+      document.getElementById('fpSub').style.display = ctx.isBoard ? 'none' : 'block';
+      document.getElementById('fpAddBtn').style.display = ctx.isBoard ? 'none' : 'inline-flex';
+
+      const body = document.getElementById('fpBody');
+      if (!ctx.fmeas.length) {
+        body.innerHTML = `<div style="padding:28px 16px;text-align:center;color:var(--ink-3);font-size:12px;border:1px dashed var(--line-strong);border-radius:9px;background:#fff">
+          ${ctx.isBoard
+            ? `点击底部 <b>打点</b> 工具，在图纸任意部位落点记录失效`
+            : `暂无失效记录，点击右上 <b>+ 失效卡</b> 录入失效照片与机理`
+          }
+        </div>`;
+        return;
+      }
+      body.innerHTML = ctx.fmeas.map(f => renderCardItemHtml(f, null)).join('');
+    }
+
+    // ================= 7. 画布拖拽、缩放底图、挪动图钉、拉线、点空白收起面板 =================
+    const stageEl = document.getElementById('stageCanvas');
+
+    stageEl.addEventListener('mousedown', (e) => {
+      if (e.target === stageEl || e.target.id === 'world' || e.target.id === 'edgesSvg') {
+        drag = { mode: 'pan', sx: e.clientX - panX, sy: e.clientY - panY, moved: false };
+        stageEl.classList.add('panning');
+      }
+    });
+
+    function startBoxDrag(e, kind, id) {
+      if (e.button !== 0) return;
+      e.stopPropagation();
+      const obj = kind === 'node' ? B().nodes.find(x => x.id === id) : B().boards.find(x => x.id === id);
+      if (!obj) return;
+      snapshotBeforeMutate();
+      drag = { mode: 'box', id, obj, mx: e.clientX, my: e.clientY, ox: obj.x, oy: obj.y, moved: false };
+    }
+
+    function startResize(e, bpId) {
+      e.stopPropagation();
+      e.preventDefault();
+      const bp = B().boards.find(x => x.id === bpId);
+      if (!bp) return;
+      snapshotBeforeMutate();
+      drag = { mode: 'resize', bp, mx: e.clientX, my: e.clientY, ow: bp.w, oh: bp.h };
+    }
+
+    function startPinDrag(e, bpId, pinId) {
+      if (e.button !== 0) return;
+      e.stopPropagation();
+      const bp = B().boards.find(x => x.id === bpId);
+      const pin = bp && bp.pins.find(x => x.id === pinId);
+      if (!pin) return;
+      const canvasRect = document.getElementById('bfc-' + bpId).getBoundingClientRect();
+      snapshotBeforeMutate();
+      drag = { mode: 'pin', bp, pin, rect: canvasRect, moved: false };
+    }
+
+    function startLink(e, fromId) {
+      e.stopPropagation();
+      e.preventDefault();
+      const box = getBox(fromId);
+      if (!box) return;
+      stageEl.classList.add('linking');
+      drag = { mode: 'link', fromId, sx: box.x + box.w / 2, sy: box.y + box.h / 2 };
+    }
+
+    window.addEventListener('mousemove', (e) => {
+      if (!drag) return;
+      if (drag.mode === 'pan') {
+        if (Math.hypot(e.clientX - (drag.sx + panX), e.clientY - (drag.sy + panY)) > 3) drag.moved = true;
+        panX = e.clientX - drag.sx;
+        panY = e.clientY - drag.sy;
+        applyTransform();
+      } else if (drag.mode === 'box') {
+        const dx = (e.clientX - drag.mx) / zoom;
+        const dy = (e.clientY - drag.my) / zoom;
+        if (Math.hypot(dx, dy) > 2) drag.moved = true;
+        drag.obj.x = Math.max(12, Math.round(drag.ox + dx));
+        drag.obj.y = Math.max(12, Math.round(drag.oy + dy));
+        const dom = document.getElementById('dom-' + drag.id);
+        if (dom) { dom.style.left = drag.obj.x + 'px'; dom.style.top = drag.obj.y + 'px'; }
+        renderEdges();
+      } else if (drag.mode === 'resize') {
+        drag.bp.w = Math.max(220, Math.round(drag.ow + (e.clientX - drag.mx) / zoom));
+        drag.bp.h = Math.max(150, Math.round(drag.oh + (e.clientY - drag.my) / zoom));
+        const dom = document.getElementById('dom-' + drag.bp.id);
+        if (dom) { dom.style.width = drag.bp.w + 'px'; dom.style.height = drag.bp.h + 'px'; }
+        renderEdges();
+      } else if (drag.mode === 'pin') {
+        drag.moved = true;
+        drag.pin.rx = Math.min(0.95, Math.max(0.05, (e.clientX - drag.rect.left) / drag.rect.width));
+        drag.pin.ry = Math.min(0.95, Math.max(0.05, (e.clientY - drag.rect.top) / drag.rect.height));
+        renderCanvas();
+      } else if (drag.mode === 'link') {
+        const r = stageEl.getBoundingClientRect();
+        const wx = (e.clientX - r.left - panX) / zoom;
+        const wy = (e.clientY - r.top - panY) / zoom;
+        const mx = (drag.sx + wx) / 2;
+        renderEdges(`M ${drag.sx} ${drag.sy} C ${mx} ${drag.sy}, ${mx} ${wy}, ${wx} ${wy}`);
+      }
+    });
+
+    window.addEventListener('mouseup', (e) => {
+      if (!drag) return;
+      if (drag.mode === 'pan' && !drag.moved) {
+        // 点击空白画布：自动收起右侧悬浮面板！
+        clearSelection();
+      } else if ((drag.mode === 'box' || drag.mode === 'pin') && !drag.moved) {
+        undoStack.pop();
+        syncUndoBtns();
+      } else if (drag.mode === 'box' || drag.mode === 'resize' || drag.mode === 'pin') {
+        persistOnly();
+      } else if (drag.mode === 'link') {
+        stageEl.classList.remove('linking');
+        const hit = e.target.closest('.node-card, .board-frame');
+        if (hit && hit.id) {
+          const toId = hit.id.replace('dom-', '');
+          if (toId && toId !== drag.fromId) createEdgeInstant(drag.fromId, toId);
+        }
+        renderEdges();
+      }
+      stageEl.classList.remove('panning');
+      drag = null;
+    });
+
+    stageEl.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      zoomStep(e.deltaY < 0 ? 0.08 : -0.08, e.clientX, e.clientY);
+    }, { passive: false });
+
+    function zoomStep(d, cx, cy) {
+      const next = Math.min(1.8, Math.max(0.45, +(zoom + d).toFixed(2)));
+      if (cx !== undefined) {
+        const r = stageEl.getBoundingClientRect();
+        const mx = cx - r.left, my = cy - r.top;
+        panX = mx - ((mx - panX) / zoom) * next;
+        panY = my - ((my - panY) / zoom) * next;
+      }
+      zoom = next;
+      applyTransform();
+    }
+
+    function resetView() { panX = 24; panY = 24; zoom = 1; applyTransform(); }
+
+    // 点击对象时，若该对象偏右会被 368px 悬浮卡遮挡，画布自动平滑左移避让！
+    function selectObj(kind, id, boardId) {
+      closePops();
+      sel = { kind, id, boardId };
+      const targetId = kind === 'pin' ? boardId : id;
+      const box = getBox(targetId);
+      if (box) {
+        const stageW = stageEl.clientWidth;
+        const rightEdgeScreenX = (box.x + box.w) * zoom + panX;
+        const safeRight = stageW - 396;
+        if (rightEdgeScreenX > safeRight) {
+          panX -= (rightEdgeScreenX - safeRight + 24);
+        }
+      }
+      renderCanvas();
+      renderModuleNav();
+    }
+
+    function clearSelection() {
+      closePops();
+      sel = null;
+      renderCanvas();
+      renderModuleNav();
+    }
+
+    function setTool(t) {
+      curTool = t;
+      document.getElementById('toolSelect').classList.toggle('active', t === 'select');
+      document.getElementById('toolPin').classList.toggle('active', t === 'pin');
+      stageEl.classList.toggle('pin-cursor', t === 'pin');
+      renderCanvas();
+      if (t === 'pin') toast('点击底图任意部位添加风险点');
+    }
+
+    // ================= 8. 零浏览器丑弹窗：原地创建节点、连线、打点、改名、删除 =================
+    function onBoardClick(e, bpId) {
+      if (curTool !== 'pin') {
+        selectObj('board', bpId);
+        return;
+      }
+      const bp = B().boards.find(x => x.id === bpId);
+      if (!bp) return;
+      const rect = document.getElementById('bfc-' + bpId).getBoundingClientRect();
+      const rx = Math.min(0.94, Math.max(0.06, (e.clientX - rect.left) / rect.width));
+      const ry = Math.min(0.94, Math.max(0.06, (e.clientY - rect.top) / rect.height));
+      snapshotBeforeMutate();
+      const num = bp.pins.length + 1;
+      const pin = { id: 'pin-' + Date.now(), num, rx, ry, title: `结构热点 #${num}`, sub: '点击修改部位说明', fmeas: [] };
+      bp.pins.push(pin);
+      persistOnly();
+      setTool('select');
+      selectObj('pin', pin.id, bp.id);
+      openCardModal();
+    }
+
+    function addNodeInstant() {
+      snapshotBeforeMutate();
+      const b = B();
+      const idx = b.nodes.length + 1;
+      const nd = {
+        id: 'nd-' + Date.now(),
+        title: `新模块节点 ${idx}`,
+        sub: '点击补充零件短码',
+        x: Math.round((240 - panX) / zoom + (idx % 3) * 36),
+        y: Math.round((140 - panY) / zoom + (idx % 3) * 28),
+        fmeas: []
+      };
+      b.nodes.push(nd);
+      persistOnly();
+      selectObj('node', nd.id);
+      setTimeout(() => {
+        const inp = document.getElementById('fpTitle');
+        inp.focus();
+        inp.select();
+      }, 40);
+    }
+
+    function createEdgeInstant(fromId, toId) {
+      const b = B();
+      const dup = b.edges.find(x => (x.from === fromId && x.to === toId) || (x.from === toId && x.to === fromId));
+      if (dup) { selectObj('edge', dup.id); return; }
+      snapshotBeforeMutate();
+      const ed = { id: 'ed-' + Date.now(), from: fromId, to: toId, label: '配合接口', sub: '两模块间作用与传递关系', fmeas: [] };
+      b.edges.push(ed);
+      persistOnly();
+      selectObj('edge', ed.id);
+      setTimeout(() => {
+        const inp = document.getElementById('fpTitle');
+        inp.focus();
+        inp.select();
+      }, 40);
+      toast('已建立连线，可在右侧直接命名或添加接口失效卡');
+    }
+
+    function addBoardImage(dataUrl, name) {
+      if (!dataUrl) {
+        uploadCb = (url, fname) => addBoardImage(url, fname.replace(/\.[^.]+$/, '').slice(0, 12));
+        document.getElementById('imgPicker').click();
+        return;
+      }
+      snapshotBeforeMutate();
+      const bp = {
+        id: 'bp-' + Date.now(),
+        title: name || '结构底图',
+        x: Math.round((90 - panX) / zoom),
+        y: Math.round((90 - panY) / zoom),
+        w: 380, h: 260,
+        img: dataUrl,
+        pins: []
+      };
+      B().boards.push(bp);
+      persistOnly();
+      selectObj('board', bp.id);
+      toast('已放入底图（右下角可拖拽缩放，点底部「打点」可在图上标风险）');
+    }
+
+    function renameSelection(val) {
+      const ctx = getActiveContext();
+      if (!ctx || !val.trim()) return;
+      snapshotBeforeMutate();
+      if (ctx.isEdge) ctx.obj.label = val.trim().slice(0, 6);
+      else ctx.obj.title = val.trim();
+      persistOnly();
+      renderAll();
+    }
+
+    function resubSelection(val) {
+      const ctx = getActiveContext();
+      if (!ctx) return;
+      snapshotBeforeMutate();
+      ctx.obj.sub = val.trim();
+      persistOnly();
+      renderAll();
+    }
+
+    function deleteActiveSelection() {
+      if (!sel) return;
+      snapshotBeforeMutate();
+      const b = B();
+      if (sel.kind === 'node') {
+        b.nodes = b.nodes.filter(x => x.id !== sel.id);
+        b.edges = b.edges.filter(x => x.from !== sel.id && x.to !== sel.id);
+      } else if (sel.kind === 'edge') {
+        b.edges = b.edges.filter(x => x.id !== sel.id);
+      } else if (sel.kind === 'board') {
+        b.boards = b.boards.filter(x => x.id !== sel.id);
+        b.edges = b.edges.filter(x => x.from !== sel.id && x.to !== sel.id);
+      } else if (sel.kind === 'pin') {
+        b.boards.forEach(bp => { bp.pins = bp.pins.filter(p => p.id !== sel.id); });
+      }
+      sel = null;
+      persistOnly();
+      renderAll();
+      toast('已删除（可按 Ctrl+Z 撤销）');
+    }
+
+    function autoLayout() {
+      snapshotBeforeMutate();
+      const b = B();
+      b.boards.forEach((bp, i) => { bp.x = 56; bp.y = 84 + i * 320; });
+      const sx = b.boards.length ? 590 : 100;
+      b.nodes.forEach((nd, i) => {
+        nd.x = sx + Math.floor(i / 2) * 310;
+        nd.y = 72 + (i % 2) * 190;
+      });
+      persistOnly();
+      resetView();
+      renderCanvas();
+      toast('已自动整理画板间距');
+    }
+
+    // ================= 9. FMEA 卡片编辑、极简风险打分、短码穿透预览 =================
+    function findFmea(fid) {
+      const b = B();
+      for (const nd of b.nodes) { const f = nd.fmeas.find(x => x.id === fid); if (f) return { f, list: nd.fmeas }; }
+      for (const ed of b.edges) { const f = ed.fmeas.find(x => x.id === fid); if (f) return { f, list: ed.fmeas }; }
+      for (const bp of b.boards) {
+        for (const p of bp.pins) { const f = p.fmeas.find(x => x.id === fid); if (f) return { f, list: p.fmeas }; }
+      }
+      return null;
+    }
+
+    function closePops() {
+      document.querySelectorAll('.pop-mini').forEach(el => el.classList.remove('open'));
+      document.getElementById('moreMenu').classList.remove('open');
+    }
+
+    function placePop(el, ev) {
+      const r = ev.currentTarget.getBoundingClientRect();
+      el.style.top = Math.min(window.innerHeight - 210, r.bottom + 6) + 'px';
+      el.style.left = Math.min(window.innerWidth - 265, Math.max(12, r.left - 80)) + 'px';
+    }
+
+    function openRiskPop(ev, fid) {
+      ev.stopPropagation();
+      closePops();
+      const hit = findFmea(fid);
+      if (!hit) return;
+      popCardTarget = hit.f;
+      const pop = document.getElementById('riskPop');
+      placePop(pop, ev);
+      pop.classList.add('open');
+      syncRiskPop();
+    }
+
+    function syncRiskPop() {
+      const f = popCardTarget;
+      document.getElementById('rS').value = f.s || 6;
+      document.getElementById('rO').value = f.o || 3;
+      document.getElementById('rD').value = f.d || 3;
+      document.getElementById('vS').textContent = f.s ?? '-';
+      document.getElementById('vO').textContent = f.o ?? '-';
+      document.getElementById('vD').textContent = f.d ?? '-';
+      document.getElementById('rpnHint').textContent = (f.s && f.o && f.d)
+        ? `RPN = ${f.s * f.o * f.d}`
+        : `当前仅使用手动等级`;
+    }
+
+    function setQuickRisk(lv) {
+      if (!popCardTarget) return;
+      snapshotBeforeMutate();
+      popCardTarget.risk = lv;
+      persistOnly();
+      syncRiskPop();
+      renderAll();
+    }
+
+    function slideSod() {
+      if (!popCardTarget) return;
+      const s = +document.getElementById('rS').value;
+      const o = +document.getElementById('rO').value;
+      const d = +document.getElementById('rD').value;
+      popCardTarget.s = s; popCardTarget.o = o; popCardTarget.d = d;
+      const rpn = s * o * d;
+      popCardTarget.risk = (s >= 9 || rpn >= 100) ? 'HIGH' : (rpn >= 40 ? 'MED' : 'LOW');
+      persistOnly();
+      syncRiskPop();
+      renderAll();
+    }
+
+    function clearSod() {
+      if (!popCardTarget) return;
+      popCardTarget.s = null; popCardTarget.o = null; popCardTarget.d = null;
+      persistOnly();
+      syncRiskPop();
+      renderAll();
+    }
+
+    function openRefSnap(ev, fid, idx) {
+      closePops();
+      const hit = findFmea(fid);
+      const ref = hit && hit.f.refs[idx];
+      if (!ref) return;
+      const pop = document.getElementById('refPop');
+      placePop(pop, ev);
+      pop.classList.add('open');
+
+      if (ref.code && MASTER_DICT[ref.code]) {
+        const m = MASTER_DICT[ref.code];
+        document.getElementById('refPopTitle').textContent = `${m.code} · ${m.name}`;
+        document.getElementById('refPopBody').innerHTML = `<div>${esc(m.spec)}</div><div style="margin-top:6px;font-size:11px;color:var(--accent)">非硬外键软绑定 · 点击可穿透至原单据</div>`;
+      } else {
+        document.getElementById('refPopTitle').textContent = '未建档自由标签';
+        document.getElementById('refPopBody').innerHTML = `<div>名称：<b>${esc(ref.label)}</b></div><div style="margin-top:4px;font-size:11px;color:var(--ink-3)">早期预研物料无需先建主数据即可挂接保存</div>`;
+      }
+    }
+
+    function openCardModal(fid) {
+      const ctx = getActiveContext();
+      if (!ctx || ctx.isBoard) return;
+      editingCardId = fid || null;
+      const hit = fid ? findFmea(fid) : null;
+      const f = hit ? hit.f : null;
+      document.getElementById('cmTitle').textContent = f ? '编辑 FMEA 卡片' : `添加失效卡 · ${ctx.isEdge ? ctx.obj.label : ctx.obj.title}`;
+      document.getElementById('cmCat').value = f ? f.cat : 'DFMEA';
+      document.getElementById('cmRisk').value = f ? f.risk : 'HIGH';
+      document.getElementById('cmSod').value = (f && f.s && f.o && f.d) ? `${f.s},${f.o},${f.d}` : '';
+      document.getElementById('cmMode').value = f ? f.mode : '';
+      document.getElementById('cmMech').value = f ? f.mech : '';
+      document.getElementById('cmEffect').value = f ? f.effect : '';
+      document.getElementById('cmCtrl').value = f ? f.ctrl : '';
+      document.getElementById('cmRefs').value = f ? (f.refs || []).map(r => r.code || r.label).join(', ') : '';
+      modalPhotos = f ? JSON.parse(JSON.stringify(f.photos || [])) : [];
+      renderModalPhotos();
+      document.getElementById('cardModal').classList.add('open');
+    }
+
+    function closeCardModal() { document.getElementById('cardModal').classList.remove('open'); }
+
+    function renderModalPhotos() {
+      const box = document.getElementById('cmPhotos');
+      if (!modalPhotos.length) {
+        box.innerHTML = `<span style="font-size:11.5px;color:var(--ink-4)">直接按 Ctrl+V 粘贴截图，或点上方按钮添加</span>`;
+        return;
+      }
+      box.innerHTML = modalPhotos.map((p, i) => `
+        <div style="position:relative;width:88px;height:56px;border-radius:6px;overflow:hidden;border:1px solid var(--line-strong)">
+          <img src="${p.url}" style="width:100%;height:100%;object-fit:cover" />
+          <span onclick="modalPhotos[${i}].tag=modalPhotos[${i}].tag==='NG'?'OK':'NG';renderModalPhotos()" style="position:absolute;top:3px;left:3px;font-size:9.5px;font-weight:700;padding:0 4px;border-radius:3px;color:#fff;cursor:pointer;background:${p.tag === 'OK' ? '#059669' : '#e11d48'}">${p.tag}</span>
+          <span onclick="modalPhotos.splice(${i},1);renderModalPhotos()" style="position:absolute;top:2px;right:3px;color:#fff;background:rgba(0,0,0,0.6);border-radius:3px;padding:0 4px;font-size:10px;cursor:pointer">✕</span>
+        </div>
+      `).join('');
+    }
+
+    function addSamplePhoto(tag) {
+      modalPhotos.push({
+        tag,
+        url: svgPhoto(tag === 'OK' ? 'OK_R' : 'CRACK'),
+        cap: tag === 'OK' ? '改进防错标准截面' : '失效部位显微实拍'
+      });
+      renderModalPhotos();
+    }
+
+    function uploadPhotoToModal() {
+      uploadCb = (url, fname) => {
+        modalPhotos.push({ tag: 'NG', url, cap: fname.slice(0, 18) });
+        renderModalPhotos();
+      };
+      document.getElementById('imgPicker').click();
+    }
+
+    function saveCardModal() {
+      const mode = document.getElementById('cmMode').value.trim();
+      if (!mode) { toast('请填写失效模式'); return; }
+      const ctx = getActiveContext();
+      if (!ctx) return;
+
+      let s = null, o = null, d = null;
+      const sodStr = document.getElementById('cmSod').value.trim();
+      if (/^\d+\s*,\s*\d+\s*,\s*\d+$/.test(sodStr)) {
+        [s, o, d] = sodStr.split(',').map(v => Math.min(10, Math.max(1, parseInt(v.trim(), 10))));
+      }
+      const refs = document.getElementById('cmRefs').value.split(/[,，]/).map(parseRef).filter(Boolean);
+
+      snapshotBeforeMutate();
+      const payload = {
+        id: editingCardId || ('fm-' + Date.now()),
+        cat: document.getElementById('cmCat').value,
+        risk: document.getElementById('cmRisk').value,
+        s, o, d,
+        mode,
+        mech: document.getElementById('cmMech').value.trim(),
+        effect: document.getElementById('cmEffect').value.trim(),
+        ctrl: document.getElementById('cmCtrl').value.trim(),
+        photos: modalPhotos,
+        refs
+      };
+
+      if (editingCardId) {
+        const hit = findFmea(editingCardId);
+        if (hit) Object.assign(hit.f, payload);
+      } else {
+        ctx.fmeas.unshift(payload);
+      }
+      persistOnly();
+      closeCardModal();
+      renderAll();
+      toast('已保存失效卡片');
+    }
+
+    function deleteFmeaCard(fid) {
+      const hit = findFmea(fid);
+      if (!hit) return;
+      snapshotBeforeMutate();
+      const idx = hit.list.findIndex(x => x.id === fid);
+      if (idx >= 0) hit.list.splice(idx, 1);
+      persistOnly();
+      renderAll();
+      toast('已移除卡片（Ctrl+Z 可撤销）');
+    }
+
+    // ================= 10. 图鉴墙、同源台账、空间一键定位、AI 录入 =================
+    function allFlattened() {
+      const kw = document.getElementById('kwInput').value.trim().toLowerCase();
+      const arr = [];
+      Object.values(db).forEach(b => {
+        b.boards.forEach(bp => bp.pins.forEach(p => p.fmeas.forEach(f =>
+          arr.push({ f, boardKey: b.id, boardName: b.name, kind: 'pin', id: p.id, bpId: bp.id, ownerName: p.title, kindTxt: '底图热点' })
+        )));
+        b.nodes.forEach(nd => nd.fmeas.forEach(f =>
+          arr.push({ f, boardKey: b.id, boardName: b.name, kind: 'node', id: nd.id, ownerName: nd.title, kindTxt: '模块节点' })
+        ));
+        b.edges.forEach(ed => ed.fmeas.forEach(f =>
+          arr.push({ f, boardKey: b.id, boardName: b.name, kind: 'edge', id: ed.id, ownerName: ed.label, kindTxt: '连线接口' })
+        ));
+      });
+      return arr.filter(it => {
+        if (highOnly && it.f.risk !== 'HIGH') return false;
+        if (kw && !JSON.stringify(it).toLowerCase().includes(kw)) return false;
+        return true;
+      });
+    }
+
+    function renderGalleryAndLedger() {
+      const list = allFlattened();
+      document.getElementById('galGrid').innerHTML = list.map(it =>
+        renderCardItemHtml(it.f, { boardKey: it.boardKey, kind: it.kind, id: it.id, bpId: it.bpId })
+      ).join('') || `<div style="color:var(--ink-4)">无匹配记录</div>`;
+
+      document.getElementById('ledgerBody').innerHTML = list.map(it => {
+        const { f } = it;
+        const img = f.photos && f.photos[0]
+          ? `<img src="${f.photos[0].url}" style="width:46px;height:30px;object-fit:cover;border-radius:4px;cursor:zoom-in;border:1px solid var(--line)" onclick="openLightbox('${f.photos[0].url}','${escAttr(f.mode)}')" />`
+          : `<span style="color:var(--ink-4);font-size:11px">-</span>`;
+        const codes = (f.refs || []).map(r => `<span class="s-chip ${r.type === 'free' ? 'free' : ''}" style="margin-right:3px">${esc(r.code || r.label)}</span>`).join('');
+        return `<tr>
+          <td style="font-size:11.5px;color:var(--ink-3)">${it.kindTxt}</td>
+          <td><b>${esc(it.ownerName)}</b></td>
+          <td>${img}</td>
+          <td><b>${esc(f.mode)}</b><div style="font-size:11.5px;color:var(--ink-3)">${esc(f.effect || '')}</div></td>
+          <td><div>${esc(f.mech || '-')}</div><div style="font-size:11.5px;color:var(--low)">${esc(f.ctrl || '')}</div></td>
+          <td><span class="r-pill ${f.risk}"><span class="dot ${f.risk}"></span>${riskText(f.risk)}</span></td>
+          <td>${codes}</td>
+          <td style="text-align:center"><button class="link-act" style="color:var(--accent);font-weight:600" onclick="locateOnCanvas('${it.boardKey}','${it.kind}','${it.id}','${it.bpId || ''}')">定位</button></td>
+        </tr>`;
+      }).join('');
+    }
+
+    function locateOnCanvas(boardKey, kind, id, bpId) {
+      curBoardId = boardKey;
+      switchView('canvas');
+      resetView();
+      selectObj(kind, id, bpId || undefined);
+    }
+
+    function openAiModal() {
+      fillAiDemo(1);
+      document.getElementById('aiModal').classList.add('open');
+    }
+    function closeAiModal() { document.getElementById('aiModal').classList.remove('open'); }
+    function fillAiDemo(n) {
+      document.getElementById('aiText').value = n === 1
+        ? `售后通报：步科电气(SUP-015)送样的无框电机定子(PRT-205)在110℃连续冲击下，定子铁芯与铝壳过盈配合面打滑转圈。机理：铝壳热膨胀系数约为硅钢片2倍，高温过盈量归零。对策：增加轴向止转销+固持胶648。关联预研件：三代髋关节模组。`
+        : `总装异常：谐波柔轮(PRT-102)与无框电机定子(PRT-205)同轴合装时，波发生器轴向窜动顶死转子端面异响。机理：波形弹簧垫圈压缩裕度不足。对策：增加台阶硬限位+压装位移监控。`;
+    }
+
+    function runAiImport() {
+      const txt = document.getElementById('aiText').value.trim();
+      if (!txt) return;
+      snapshotBeforeMutate();
+      curBoardId = 'actuator';
+      const b = B();
+
+      if (txt.includes('同轴合装')) {
+        let ed = b.edges.find(x => (x.from === 'nd-flex' && x.to === 'nd-stator') || (x.from === 'nd-stator' && x.to === 'nd-flex'));
+        if (!ed) {
+          ed = { id: 'ed-' + Date.now(), from: 'nd-stator', to: 'nd-flex', label: '轴向窜动', sub: '波发生器 ➔ 转子端面配合接口', fmeas: [] };
+          b.edges.push(ed);
+        }
+        ed.fmeas.unshift({
+          id: 'fm-' + Date.now(), cat: 'DFMEA', risk: 'HIGH', s: 8, o: 3, d: 4,
+          mode: '波发生器轴向窜动顶死电机转子端面卡滞',
+          mech: '轴向波形弹簧垫圈压缩裕度不足或漏装防错缺失',
+          effect: '正反转卡顿异响、峰值电流报警',
+          ctrl: '台阶轴硬限位 + 压装位移传感器在线监控垫圈在位',
+          photos: [{ tag: 'NG', url: svgPhoto('CRACK'), cap: '转子端面环形磨痕实拍' }],
+          refs: [MASTER_DICT['PRT-102'], MASTER_DICT['PRT-205']].map(m => ({ type: m.type, code: m.code, label: m.name }))
+        });
+        persistOnly();
+        closeAiModal();
+        switchView('canvas');
+        selectObj('edge', ed.id);
+        toast('AI 已生成「轴向窜动」接口连线并挂载失效卡片');
+      } else {
+        const nd = b.nodes.find(x => x.id === 'nd-stator') || b.nodes[0];
+        nd.fmeas.unshift({
+          id: 'fm-' + Date.now(), cat: '教训', risk: 'HIGH', s: 9, o: 3, d: 4,
+          mode: '110℃高温冲击下定子铁芯与铝壳过盈丧失打滑',
+          mech: '铝壳热膨胀系数为硅钢片 2 倍，高温下冷态 0.04mm 过盈量归零',
+          effect: '相位角突变失步或扯断引线',
+          ctrl: '轴向骑缝止转销 + 耐高温圆柱固持胶 648 双重防错',
+          photos: [{ tag: 'NG', url: svgPhoto('WIRE'), cap: '定子外圆打滑拉伤实拍' }],
+          refs: [
+            { type: 'part', code: 'PRT-205', label: '无框力矩电机定子' },
+            { type: 'supplier', code: 'SUP-015', label: '步科电气' },
+            { type: 'free', code: null, label: '三代髋关节模组' }
+          ]
+        });
+        persistOnly();
+        closeAiModal();
+        switchView('canvas');
+        selectObj('node', nd.id);
+        toast('AI 已自动归入「无框电机定子」节点');
+      }
+      renderAll();
+    }
+
+    // ================= 11. 全局快捷键、Ctrl+V 贴图、拖拽图片入画布、导入导出 =================
+    window.addEventListener('keydown', (e) => {
+      if (['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName)) return;
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); undo(); }
+      else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') { e.preventDefault(); redo(); }
+      else if ((e.key === 'Delete' || e.key === 'Backspace') && sel) { e.preventDefault(); deleteActiveSelection(); }
+      else if (e.key === 'Escape') { clearSelection(); closeCardModal(); closeAiModal(); }
+    });
+
+    window.addEventListener('paste', (e) => {
+      const items = (e.clipboardData && e.clipboardData.items) || [];
+      for (const it of items) {
+        if (it.type.indexOf('image') !== -1) {
+          const r = new FileReader();
+          r.onload = (ev) => {
+            if (document.getElementById('cardModal').classList.contains('open')) {
+              modalPhotos.push({ tag: 'NG', url: ev.target.result, cap: '剪贴板截图' });
+              renderModalPhotos();
+              toast('已贴入失效照片');
+            } else {
+              addBoardImage(ev.target.result, '剪贴板底图');
+            }
+          };
+          r.readAsDataURL(it.getAsFile());
+          e.preventDefault();
+          return;
+        }
+      }
+    });
+
+    stageEl.addEventListener('dragover', (e) => { e.preventDefault(); stageEl.classList.add('drop-ready'); });
+    stageEl.addEventListener('dragleave', () => stageEl.classList.remove('drop-ready'));
+    stageEl.addEventListener('drop', (e) => {
+      e.preventDefault();
+      stageEl.classList.remove('drop-ready');
+      const file = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+      if (file && file.type.startsWith('image/')) {
+        const r = new FileReader();
+        r.onload = (ev) => addBoardImage(ev.target.result, file.name.replace(/\.[^.]+$/, '').slice(0, 12));
+        r.readAsDataURL(file);
+      }
+    });
+
+    document.getElementById('imgPicker').addEventListener('change', function () {
+      const f = this.files && this.files[0];
+      if (!f || !uploadCb) return;
+      const r = new FileReader();
+      r.onload = (ev) => uploadCb(ev.target.result, f.name);
+      r.readAsDataURL(f);
+      this.value = '';
+    });
+
+    document.getElementById('jsonPicker').addEventListener('change', function () {
+      const f = this.files && this.files[0];
+      if (!f) return;
+      const r = new FileReader();
+      r.onload = (ev) => {
+        try {
+          const parsed = JSON.parse(ev.target.result);
+          if (parsed && typeof parsed === 'object') {
+            snapshotBeforeMutate();
+            db = parsed;
+            curBoardId = Object.keys(db)[0];
+            sel = null;
+            persistOnly();
+            renderAll();
+            toast('已导入画板数据');
+          }
+        } catch (_) { toast('JSON 格式无效'); }
+      };
+      r.readAsText(f);
+      this.value = '';
+    });
+
+    function exportJson() {
+      closePops();
+      const blob = new Blob([JSON.stringify(db, null, 2)], { type: 'application/json' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'sqm_fmea_boards.json';
+      a.click();
+      toast('已导出 JSON 备份');
+    }
+
+    function resetFactory() {
+      closePops();
+      snapshotBeforeMutate();
+      db = buildFactoryData();
+      curBoardId = 'actuator';
+      sel = { kind: 'pin', id: 'pin-1', boardId: 'bp-1' };
+      resetView();
+      persistOnly();
+      renderAll();
+      toast('已恢复初始示例数据');
+    }
+
+    function openNewBoardModal() {
+      document.getElementById('newBoardName').value = '';
+      document.getElementById('boardModal').classList.add('open');
+      setTimeout(() => document.getElementById('newBoardName').focus(), 40);
+    }
+
+    function confirmNewBoard() {
+      const name = document.getElementById('newBoardName').value.trim();
+      const group = document.getElementById('newBoardGroup').value.trim() || '未分组系统';
+      if (!name) return;
+      snapshotBeforeMutate();
+      const id = 'bd-' + Date.now();
+      db[id] = {
+        id, group, name,
+        boards: [],
+        nodes: [{ id: 'nd-' + Date.now(), title: '核心模块 1', sub: '点击修改短码', x: 140, y: 140, fmeas: [] }],
+        edges: []
+      };
+      curBoardId = id;
+      sel = null;
+      persistOnly();
+      document.getElementById('boardModal').classList.remove('open');
+      renderAll();
+      toast(`已创建画板「${name}」`);
+    }
+
+    function onSwitchBoard(id) {
+      curBoardId = id;
+      sel = null;
+      resetView();
+      renderAll();
+    }
+
+    function switchView(v) {
+      curView = v;
+      document.getElementById('tabCanvas').classList.toggle('active', v === 'canvas');
+      document.getElementById('tabGallery').classList.toggle('active', v === 'gallery');
+      document.getElementById('tabLedger').classList.toggle('active', v === 'ledger');
+      document.getElementById('stageCanvas').style.display = v === 'canvas' ? 'block' : 'none';
+      document.getElementById('stageGallery').classList.toggle('active', v === 'gallery');
+      document.getElementById('stageLedger').classList.toggle('active', v === 'ledger');
+      renderAll();
+    }
+
+    function toggleHighFilter() {
+      highOnly = !highOnly;
+      document.getElementById('btnHighOnly').classList.toggle('active-filter', highOnly);
+      renderAll();
+    }
+
+    function toggleMoreMenu(ev) {
+      ev.stopPropagation();
+      document.getElementById('moreMenu').classList.toggle('open');
+    }
+
+    document.addEventListener('click', (e) => {
+      if (!e.target.closest('.pop-mini') && !e.target.closest('.more-wrap')) closePops();
+    });
+
+    function openLightbox(url, cap) {
+      document.getElementById('lbImg').src = url;
+      document.getElementById('lbCap').textContent = cap || '';
+      document.getElementById('lightbox').classList.add('open');
+    }
+
+    function toast(msg) {
+      const box = document.getElementById('toastLayer');
+      const el = document.createElement('div');
+      el.className = 'toast-pill';
+      el.textContent = msg;
+      box.appendChild(el);
+      setTimeout(() => el.remove(), 2200);
+    }
+
+    function esc(s) {
+      return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+    function escAttr(s) { return esc(s).replace(/'/g, '&#39;'); }
+
+    function renderAll() {
+      renderModuleNav();
+      renderCanvas();
+      renderGalleryAndLedger();
+      syncUndoBtns();
+    }
+
+    // 首次启动按屏幕可用宽度自适应缩放，确保左右面板展开时全图完整居中无遮挡
+    (function fitInitialStage() {
+      const availW = stageEl.clientWidth - (sel ? 396 : 32);
+      if (availW > 300 && availW < 1120) {
+        zoom = Math.max(0.68, +(availW / 1140).toFixed(2));
+        panX = 18;
+        panY = 36;
+      }
+      renderAll();
+    })();
+  </script>
+</body>
+</html>

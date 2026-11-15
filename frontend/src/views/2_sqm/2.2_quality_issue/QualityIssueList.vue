@@ -8,6 +8,10 @@
       storage-key="quality_issue_list"
       import-key="quality_issue"
       import-title="质量问题台账"
+      show-actions
+      action-width="176px"
+      entity-label="质量问题单"
+      :row-label-key="(r: QualityIssueRow) => `${r.issue_no}${r.title ? ` (${r.title})` : ''}`"
       allow-quick-add
       quick-add-placeholder="快速登记新质量问题简述..."
       :quick-add-defaults="{ severity: '一般', status: '登记', occurred_date: new Date().toISOString().slice(0, 10) }"
@@ -16,6 +20,8 @@
       @size-change="handleSizeChange"
       @cell-change="handleCellChange"
       @quick-add="handleQuickAdd"
+      @edit="handleEdit"
+      @delete="handleDelete"
     >
       <!-- 顶部检索插槽 -->
       <template #search>
@@ -71,7 +77,7 @@
 
       <!-- 工具栏按钮 -->
       <template #toolbar>
-        <el-button type="primary" :icon="Plus" @click="handleCreate">
+        <el-button type="primary" size="small" :icon="Plus" @click="handleCreate">
           登记新问题
         </el-button>
       </template>
@@ -85,24 +91,16 @@
         <span v-else class="text-muted">-</span>
       </template>
 
-      <!-- 操作列 -->
-      <template #action="{ row }">
-        <el-button link type="primary" :icon="Edit" @click="handleEdit(row)">
-          处理/编辑
-        </el-button>
-        <el-popconfirm
-          title="确认删除该质量问题记录？"
-          confirm-button-text="删除"
-          cancel-button-text="取消"
-          confirm-button-type="danger"
-          @confirm="handleDelete(row)"
+      <!-- 一键沉淀至 FMEA 视觉风险画板插槽 -->
+      <template #action-prefix="{ row }">
+        <el-button
+          link
+          type="warning"
+          size="small"
+          @click.stop="openDepositToFmea(row)"
         >
-          <template #reference>
-            <el-button link type="danger" :icon="Delete">
-              删除
-            </el-button>
-          </template>
-        </el-popconfirm>
+          沉淀FMEA
+        </el-button>
       </template>
 
       <!-- 空状态 -->
@@ -117,17 +115,22 @@
 
     <!-- 70% 宽幅沉浸式抽屉表单 -->
     <QualityIssueForm ref="qualityIssueFormRef" @success="fetchData" />
+
+    <!-- 沉淀至 FMEA 画板弹窗 -->
+    <DepositToFmeaDialog v-model="depositFmeaVisible" :issue="depositingIssue" />
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
-import { Search, Refresh, Plus, Edit, Delete } from '@element-plus/icons-vue'
+import { useRoute } from 'vue-router'
+import { Search, Refresh, Plus } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import axios from 'axios'
 import DataTable from '@/components/common/DataTable/index.vue'
-import type { TableColumn, CellChangeEvent } from '@/components/common/DataTable/types'
+import { getStoredTablePageSize, type TableColumn, type CellChangeEvent } from '@/components/common/DataTable/types'
 import QualityIssueForm from './QualityIssueForm.vue'
+import DepositToFmeaDialog from '@/views/6_fmea/components/DepositToFmeaDialog.vue'
 
 interface QualityIssueRow {
   id: number
@@ -145,6 +148,11 @@ interface QualityIssueRow {
   responsible?: string
   description?: string
   containment_action?: string
+  defect_qty?: number
+  batch_qty?: number
+  project_code?: string
+  mrb_no?: string
+  attachments?: any[]
   created_at: string
 }
 
@@ -159,18 +167,9 @@ const filters = reactive({
   status: 'ALL'
 })
 
-const getStoredPageSize = (storageKey: string, fallback = 10) => {
-  try {
-    const v = localStorage.getItem(`${storageKey}_pagesize`)
-    return v ? Number(v) || fallback : fallback
-  } catch {
-    return fallback
-  }
-}
-
 const pagination = reactive({
   page: 1,
-  pageSize: getStoredPageSize('quality_issue_list', 10),
+  pageSize: getStoredTablePageSize('quality_issue_list', 10),
   total: 0
 })
 
@@ -184,6 +183,40 @@ const columns: TableColumn[] = [
     dataType: 'code',
     editable: true,
     editType: 'input'
+  },
+  {
+    prop: 'mrb_no',
+    label: 'MRB号',
+    width: 140,
+    sortable: true,
+    dataType: 'code',
+    editable: true,
+    editType: 'input'
+  },
+  {
+    prop: 'project_code',
+    label: '项目号',
+    width: 100,
+    sortable: true,
+    dataType: 'code',
+    editable: true,
+    editType: 'input'
+  },
+  {
+    prop: 'defect_qty',
+    label: '不合格数',
+    width: 95,
+    align: 'center',
+    sortable: true,
+    editable: true,
+    editType: 'number'
+  },
+  {
+    prop: 'attachments',
+    label: '现场照片',
+    width: 125,
+    dataType: 'image',
+    editable: true
   },
   {
     prop: 'title',
@@ -351,13 +384,9 @@ const handleCellChange = async (event: CellChangeEvent) => {
     await axios.put(`/api/sqm/issues/${event.row.id}`, {
       [event.prop]: event.value
     })
-    ElMessage.success({
-      message: `已自动更新 [${event.prop}]`,
-      duration: 1500
-    })
   } catch (err: any) {
+    event.row[event.prop] = event.oldValue
     ElMessage.error(`更新失败: ${err.response?.data?.detail || err.message}`)
-    fetchData()
   }
 }
 
@@ -378,7 +407,19 @@ const handleQuickAdd = async (payload: Record<string, any>, done: () => void) =>
   }
 }
 
+const route = useRoute()
+const depositFmeaVisible = ref(false)
+const depositingIssue = ref<QualityIssueRow | null>(null)
+
+const openDepositToFmea = (row: QualityIssueRow) => {
+  depositingIssue.value = row
+  depositFmeaVisible.value = true
+}
+
 onMounted(() => {
+  if (typeof route.query.keyword === 'string' && route.query.keyword.trim()) {
+    filters.keyword = route.query.keyword.trim()
+  }
   fetchData()
 })
 </script>

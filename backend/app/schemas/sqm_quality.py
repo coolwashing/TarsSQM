@@ -1,5 +1,5 @@
 from datetime import date, datetime
-from typing import Optional, List, Generic, TypeVar
+from typing import Optional, List, Generic, TypeVar, Any
 from pydantic import BaseModel, ConfigDict, Field
 from app.schemas.main_data import PageResult
 from app.schemas.attachment import SysAttachmentOut
@@ -65,6 +65,11 @@ class QualityIssueBase(BaseModel):
     responsible: Optional[str] = Field(None, max_length=64, description="责任人")
     occurred_date: Optional[date] = Field(None, description="发生日期")
     closed_date: Optional[date] = Field(None, description="闭环日期")
+    defect_qty: Optional[int] = Field(1, description="不合格数量")
+    batch_qty: Optional[int] = Field(None, description="批次数量")
+    project_code: Optional[str] = Field(None, max_length=64, description="项目号")
+    mrb_no: Optional[str] = Field(None, max_length=64, description="MRB流水号")
+    attachments: Optional[Any] = Field(None, description="缺陷现场照片列表")
     remark: Optional[str] = Field(None, description="备注")
 
 
@@ -83,6 +88,11 @@ class QualityIssueUpdate(BaseModel):
     responsible: Optional[str] = Field(None, max_length=64)
     occurred_date: Optional[date] = None
     closed_date: Optional[date] = None
+    defect_qty: Optional[int] = None
+    batch_qty: Optional[int] = None
+    project_code: Optional[str] = None
+    mrb_no: Optional[str] = None
+    attachments: Optional[Any] = None
     remark: Optional[str] = None
 
 
@@ -94,6 +104,5 @@ class QualityIssueOut(QualityIssueBase):
     part_name: Optional[str] = None
     supplier_code: Optional[str] = None
     supplier_name: Optional[str] = None
-    attachments: List[SysAttachmentOut] = Field(default_factory=list, description="关联整改附件清单")
     created_at: datetime
     updated_at: datetime

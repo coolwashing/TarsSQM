@@ -122,7 +122,9 @@ KNOWN_TABLE_COMMENTS = {
     "sqm_quality_issue": "质量异常与 8D 遏制改善表 (问题闭环追溯)",
     "sqm_ctq_line": "CTQ 关键质量特性表 (工程上下限与Cpk)",
     "sqm_kb_doc": "质量技术规程与工程知识库 (Windows风格目录树)",
-    "sqm_attachment": "工程附件元数据存储表 (多租户物理映射)"
+    "sqm_attachment": "工程附件元数据存储表 (多租户物理映射)",
+    "sqm_fmea_board": "FMEA 视觉风险画板表 (系统模块目录与空间拓扑骨架)",
+    "sqm_fmea_item": "FMEA 失效机理与防错经验主表 (三视图同源与双态软关联)"
 }
 
 

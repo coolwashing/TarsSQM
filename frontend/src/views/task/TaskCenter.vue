@@ -54,15 +54,19 @@
           :data="tableData"
           :loading="loading"
           :pagination="pagination"
-          action-width="150px"
           storage-key="sqm_task_center_v3"
           import-key="task"
           import-title="协同待办任务"
           unique-key="task_code"
+          show-actions
+          entity-label="协同任务"
+          :row-label-key="(r: TaskItem) => `${r.title} (${r.task_code})`"
           @refresh="fetchData"
           @page-change="handlePageChange"
           @size-change="handleSizeChange"
           @cell-change="handleCellChange"
+          @edit="openEditModal"
+          @delete="(r: TaskItem) => handleDeleteTask(r.id)"
         >
           <!-- 统一紧凑检索插槽 (单行排布、不换行) -->
           <template #search>
@@ -266,26 +270,6 @@
               📎 {{ row.attachment_count }}
             </span>
             <span v-else class="text-dim">-</span>
-          </template>
-
-          <!-- 操作列插槽 -->
-          <template #action="{ row }">
-            <el-button link type="primary" size="small" @click="openEditModal(row)">
-              编辑详情
-            </el-button>
-            <el-popconfirm
-              title="确定删除此协同任务？"
-              confirm-button-text="删除"
-              cancel-button-text="取消"
-              confirm-button-type="danger"
-              @confirm="handleDeleteTask(row.id)"
-            >
-              <template #reference>
-                <el-button link type="danger" size="small">
-                  删除
-                </el-button>
-              </template>
-            </el-popconfirm>
           </template>
 
           <!-- 飞书多维表格风格：表格行底极速行内录入插槽 -->
@@ -633,7 +617,7 @@ import { useRouter } from 'vue-router'
 import { Plus, Search, Refresh, MagicStick } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import DataTable from '@/components/common/DataTable/index.vue'
-import type { TableColumn, CellChangeEvent } from '@/components/common/DataTable/types'
+import { getStoredTablePageSize, type TableColumn, type CellChangeEvent } from '@/components/common/DataTable/types'
 import { taskApi } from '@/api/task'
 import type { TaskItem, TaskSummaryStats, TaskStatus, TaskPriority, TaskSourceType } from '@/types/task'
 
@@ -703,7 +687,7 @@ const filters = reactive({
 
 const pagination = reactive({
   page: 1,
-  pageSize: 20,
+  pageSize: getStoredTablePageSize('sqm_task_center_v3', 20),
   total: 0
 })
 

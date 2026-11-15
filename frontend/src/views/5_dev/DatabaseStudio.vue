@@ -151,6 +151,7 @@
                   :columns="dictTableColumns"
                   :data="columnsData"
                   :loading="loadingColumns"
+                  row-key="column_name"
                   storage-key="db_studio_dict"
                   @refresh="fetchColumns"
                   @cell-change="handleDictCellChange"
@@ -180,6 +181,11 @@
                   :data="rowsData"
                   :loading="loadingRows"
                   :pagination="pagination"
+                  :row-key="primaryKeyCol"
+                  :storage-key="currentTable ? `db_rows_${currentTable.table_name}` : 'db_studio_rows'"
+                  show-actions
+                  :entity-label="currentTable ? `表 ${currentTable.table_name} 物理记录` : '物理记录'"
+                  :row-label-key="(r: any) => `主键 ${r[primaryKeyCol]}`"
                   allow-quick-add
                   quick-add-placeholder="快速添加数据行..."
                   @refresh="fetchRows"
@@ -187,6 +193,8 @@
                   @size-change="handleSizeChange"
                   @cell-change="handleCellChange"
                   @quick-add="handleQuickAddRow"
+                  @edit="handleOpenEditRowDialog"
+                  @delete="handleDeleteRow"
                 >
                   <!-- 顶部搜索 -->
                   <template #search>
@@ -194,38 +202,15 @@
                       <el-input
                         v-model="searchKeyword"
                         placeholder="在当前表中检索任意字段内容..."
+                        size="small"
                         clearable
                         :prefix-icon="Search"
-                        style="width: 320px;"
+                        style="width: 300px;"
                         @keyup.enter="handleSearchRows"
                         @clear="handleSearchRows"
                       />
-                      <el-button type="primary" :icon="Search" @click="handleSearchRows">查询</el-button>
-                      <el-button :icon="Refresh" @click="handleResetSearchRows">重置</el-button>
-                    </div>
-                  </template>
-
-                  <!-- 行操作插槽 -->
-                  <template #action="{ row }">
-                    <div class="row-actions-group">
-                      <el-button
-                        link
-                        type="primary"
-                        :icon="Edit"
-                        size="small"
-                        @click="handleOpenEditRowDialog(row)"
-                      >
-                        编辑
-                      </el-button>
-                      <el-button
-                        link
-                        type="danger"
-                        :icon="Delete"
-                        size="small"
-                        @click="handleDeleteRow(row)"
-                      >
-                        删除
-                      </el-button>
+                      <el-button type="primary" size="small" :icon="Search" @click="handleSearchRows">查询</el-button>
+                      <el-button size="small" :icon="Refresh" @click="handleResetSearchRows">重置</el-button>
                     </div>
                   </template>
                 </DataTable>
@@ -412,8 +397,6 @@ import {
   Refresh,
   Setting,
   Plus,
-  Edit,
-  Delete,
   InfoFilled,
   QuestionFilled,
   Document,
@@ -423,7 +406,7 @@ import {
 import { ElMessage, ElMessageBox, type FormInstance } from 'element-plus'
 import axios from 'axios'
 import DataTable from '@/components/common/DataTable/index.vue'
-import type { TableColumn, CellChangeEvent } from '@/components/common/DataTable/types'
+import { getStoredTablePageSize, type TableColumn, type CellChangeEvent } from '@/components/common/DataTable/types'
 import DbConfigDialog from '@/components/dev/DbConfigDialog.vue'
 
 const TiptapEditor = defineAsyncComponent(() => import('@/components/editor/TiptapEditor.vue'))
@@ -530,7 +513,7 @@ const primaryKeyCol = ref<string>('id')
 
 const pagination = reactive({
   page: 1,
-  pageSize: 20,
+  pageSize: getStoredTablePageSize('db_studio_rows', 20),
   total: 0
 })
 
@@ -595,6 +578,30 @@ const formatColumnLabel = (col: DbColumnItem) => {
   const raw = col.column_comment.trim()
   const clean = raw.split(/[:：(（;；]/)[0].trim()
   return clean || raw
+}
+
+const dictTableColumns: TableColumn[] = [
+  { prop: 'column_name', label: '字段物理名', minWidth: 180, sortable: true },
+  { prop: 'column_comment', label: '业务注释', minWidth: 260, editable: true, editType: 'input' },
+  { prop: 'column_type', label: '数据类型', width: 160, sortable: true },
+  { prop: 'is_nullable', label: '允许为空', width: 95, align: 'center' },
+  { prop: 'column_default', label: '默认值', width: 130, align: 'center', dataType: 'code' }
+]
+
+const handleDictCellChange = async ({ row, prop, value, oldValue }: any) => {
+  if (prop === 'column_comment' && currentTable.value) {
+    const newComment = (value || '').trim()
+    try {
+      await axios.put(`/api/dev/db/tables/${currentTable.value.table_name}/columns/comment`, {
+        column_name: row.column_name,
+        comment: newComment
+      })
+      row.column_comment = newComment
+    } catch (err: any) {
+      row.column_comment = oldValue
+      ElMessage.error(`更新注释失败: ${err.response?.data?.detail || err.message}`)
+    }
+  }
 }
 
 // 动态将字段字典转为 DataTable 的列配置
@@ -766,11 +773,12 @@ const handleSizeChange = (size: number) => {
   fetchRows()
 }
 
-// 行内单元格修改 (通过 DataTable 的 cell-change 事件)
+// 行内单元格修改 (通过 DataTable 的 cell-change 事件，右上角微绿点反馈，不弹全局大吐司)
 const handleCellChange = async (event: CellChangeEvent) => {
   if (!currentTable.value) return
   const pkVal = event.row[primaryKeyCol.value]
   if (pkVal === undefined || pkVal === null) {
+    event.row[event.prop] = event.oldValue
     ElMessage.warning('该表未检测到有效主键，无法行内保存')
     return
   }
@@ -782,7 +790,6 @@ const handleCellChange = async (event: CellChangeEvent) => {
       },
       primary_col: primaryKeyCol.value
     })
-    ElMessage.success(`已保存修改: ${event.prop}`)
   } catch (err: any) {
     // 恢复旧值
     event.row[event.prop] = event.oldValue
@@ -983,33 +990,23 @@ const handleSaveRow = async () => {
   })
 }
 
-// 删除记录（严格遵守 ui-ux.md 二次确认）
-const handleDeleteRow = (row: any) => {
+// 删除记录（二次确认已由 DataTable 内置统一 ElMessageBox.confirm 完成，此处直接执行删除）
+const handleDeleteRow = async (row: any) => {
   const table = currentTable.value
   if (!table) return
   const pkVal = row[primaryKeyCol.value]
-  ElMessageBox.confirm(
-    `确定要永久删除 ${table.table_name} 中主键为 [${pkVal}] 的这条物理数据吗？此操作无法撤销。`,
-    '高风险破坏性操作警告',
-    {
-      confirmButtonText: '确定删除',
-      cancelButtonText: '取消',
-      type: 'warning'
+  try {
+    await axios.delete(`/api/dev/db/tables/${table.table_name}/rows/${pkVal}`, {
+      params: { primary_col: primaryKeyCol.value }
+    })
+    ElMessage.success('物理数据行已删除')
+    fetchRows()
+    if (table.real_count) {
+      table.real_count -= 1
     }
-  ).then(async () => {
-    try {
-      await axios.delete(`/api/dev/db/tables/${table.table_name}/rows/${pkVal}`, {
-        params: { primary_col: primaryKeyCol.value }
-      })
-      ElMessage.success('物理数据行已删除')
-      fetchRows()
-      if (table.real_count) {
-        table.real_count -= 1
-      }
-    } catch (err: any) {
-      ElMessage.error(`删除失败: ${err.response?.data?.detail || err.message}`)
-    }
-  }).catch(() => {})
+  } catch (err: any) {
+    ElMessage.error(`删除失败: ${err.response?.data?.detail || err.message}`)
+  }
 }
 
 onMounted(() => {

@@ -7,6 +7,7 @@ from app.models.main_data import SqmSupplier, SqmPart, SqmProject
 from app.models.sqm_quality import SqmPartDev, SqmQualityIssue
 from app.models.ctq import SqmCtq
 from app.models.task import SqmTask
+from app.models.fmea import SqmFmeaItem
 
 EXCEL_MODULE_CONFIGS: Dict[str, Dict[str, Any]] = {
     "supplier": {
@@ -295,6 +296,29 @@ EXCEL_MODULE_CONFIGS: Dict[str, Dict[str, Any]] = {
                 "sample": "齿圈齿面高频淬火局部硬度未达标",
             },
             {
+                "prop": "defect_qty",
+                "label": "不合格数量",
+                "required": False,
+                "type": "int",
+                "default": 1,
+                "comment": "不合格品或缺陷数量 (件)",
+                "sample": 1,
+            },
+            {
+                "prop": "project_code",
+                "label": "项目号",
+                "required": False,
+                "comment": "所属项目或车型平台 (如 AWR)",
+                "sample": "AWR",
+            },
+            {
+                "prop": "mrb_no",
+                "label": "MRB流水号",
+                "required": False,
+                "comment": "外部MRB评审单流水号 (如 MRB20261104800)",
+                "sample": "MRB20261104800",
+            },
+            {
                 "prop": "part_no",
                 "label": "关联零件图号",
                 "required": False,
@@ -505,6 +529,83 @@ EXCEL_MODULE_CONFIGS: Dict[str, Dict[str, Any]] = {
                 "required": False,
                 "comment": "计划截止日期（YYYY-MM-DD）",
                 "sample": "2026-11-15",
+            },
+        ],
+    },
+
+    "fmea_item": {
+        "title": "FMEA风险与防错经验台账",
+        "sheet_name": "FMEA经验列表",
+        "model": SqmFmeaItem,
+        "unique_key": "fmea_code",
+        "fields": [
+            {
+                "prop": "fmea_code",
+                "label": "FMEA编号",
+                "required": False,
+                "unique": True,
+                "comment": "唯一编号（留空自动生成 FMEA-YYYYMM-NNN）",
+                "sample": "FMEA-202611-001",
+            },
+            {
+                "prop": "fmea_type",
+                "label": "FMEA类型",
+                "required": True,
+                "enums": ["DFMEA", "PFMEA", "LESSON"],
+                "default": "DFMEA",
+                "comment": "类型：DFMEA(设计)、PFMEA(工艺)、LESSON(历史教训)",
+                "sample": "DFMEA",
+            },
+            {
+                "prop": "target_title_snapshot",
+                "label": "归属模块/工序部位",
+                "required": False,
+                "comment": "结构模块、工序或接口名称",
+                "sample": "谐波减速器柔轮",
+            },
+            {
+                "prop": "failure_mode",
+                "label": "潜在失效模式",
+                "required": True,
+                "comment": "失效表现形式（核心必填）",
+                "sample": "柔轮齿根交变疲劳微裂纹",
+            },
+            {
+                "prop": "failure_mech",
+                "label": "失效机理与根因",
+                "required": False,
+                "comment": "物理化学微观机理或制程原因",
+                "sample": "过渡圆角偏小产生应力集中",
+            },
+            {
+                "prop": "failure_effect",
+                "label": "潜在失效后果",
+                "required": False,
+                "comment": "对子系统或整机的后果影响",
+                "sample": "关节异响甚至柔轮撕裂卡死",
+            },
+            {
+                "prop": "control_measure",
+                "label": "防错设计与探测规范",
+                "required": False,
+                "comment": "设计红线标准与检测手段",
+                "sample": "齿根圆角R≥0.30 + 喷丸强化 + 200h冲击台架",
+            },
+            {
+                "prop": "risk_level",
+                "label": "风险等级",
+                "required": True,
+                "enums": ["HIGH", "MED", "LOW"],
+                "default": "MED",
+                "comment": "风险定级：HIGH(高危)、MED(中危)、LOW(低危)",
+                "sample": "HIGH",
+            },
+            {
+                "prop": "ref_codes_text",
+                "label": "关联编码/标签",
+                "required": False,
+                "comment": "软关联零件图号、供应商编码或自由标签（空格或逗号分隔）",
+                "sample": "PRT-102 SUP-008 三代轻量化柔轮",
             },
         ],
     },

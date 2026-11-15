@@ -305,6 +305,17 @@ def commit_smart_import(
                 if "sop_date" in filtered_payload:
                     filtered_payload["sop_date"] = normalize_date_val(filtered_payload["sop_date"])
 
+            elif biz_key == "quality_issue":
+                if not filtered_payload.get("issue_no") or str(filtered_payload["issue_no"]).strip() in ("", "-"):
+                    import random
+                    filtered_payload["issue_no"] = f"QI-{datetime.datetime.now().strftime('%Y%m%d')}-{random.randint(100, 999)}"
+                if not filtered_payload.get("defect_qty"):
+                    filtered_payload["defect_qty"] = 1
+                if "occurred_date" in filtered_payload:
+                    filtered_payload["occurred_date"] = normalize_date_val(filtered_payload["occurred_date"])
+                if not filtered_payload.get("title") or str(filtered_payload["title"]).strip() in ("", "-"):
+                    filtered_payload["title"] = filtered_payload.get("mrb_no") or "新建质量问题"
+
             elif biz_key == "task":
                 if not filtered_payload.get("title") or str(filtered_payload["title"]).strip() in ("", "-"):
                     filtered_payload["title"] = filtered_payload.get("task_code") or "新建待办协同任务"
@@ -337,6 +348,21 @@ def commit_smart_import(
                 if not filtered_payload.get("task_code") or str(filtered_payload["task_code"]).strip() in ("", "-"):
                     import random
                     filtered_payload["task_code"] = f"TSK-{datetime.datetime.now().strftime('%Y%m')}-{random.randint(100, 999)}"
+
+            elif biz_key == "fmea_item":
+                import random
+                if not filtered_payload.get("fmea_code") or str(filtered_payload["fmea_code"]).strip() in ("", "-"):
+                    filtered_payload["fmea_code"] = f"FMEA-{datetime.datetime.now().strftime('%Y%m')}-{random.randint(100, 999)}"
+                if not filtered_payload.get("failure_mode") or str(filtered_payload["failure_mode"]).strip() in ("", "-"):
+                    filtered_payload["failure_mode"] = "待补充失效模式"
+                r_map = {"高": "HIGH", "高危": "HIGH", "高风险": "HIGH", "中": "MED", "中危": "MED", "中风险": "MED", "低": "LOW", "低危": "LOW", "低风险": "LOW"}
+                rl = str(filtered_payload.get("risk_level") or "MED").strip()
+                filtered_payload["risk_level"] = r_map.get(rl, rl.upper() if rl.upper() in ("HIGH", "MED", "LOW") else "MED")
+                ft = str(filtered_payload.get("fmea_type") or "DFMEA").strip().upper()
+                filtered_payload["fmea_type"] = ft if ft in ("DFMEA", "PFMEA", "LESSON") else "DFMEA"
+                if filtered_payload.get("ref_codes_text") and not filtered_payload.get("linked_refs"):
+                    tokens = [t.strip() for t in re.split(r"[,，;；\s]+", str(filtered_payload["ref_codes_text"])) if t.strip()]
+                    filtered_payload["linked_refs"] = [{"type": "free", "ref_id": None, "code": None, "label": tk} for tk in tokens[:8]]
 
             key_val = str(clean_dict.get(unique_key, "")).strip() if unique_key else None
             # 支持每行单独指定的 _conflict_action 策略覆盖全局

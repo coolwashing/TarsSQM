@@ -1,5 +1,5 @@
 from datetime import datetime, date
-from sqlalchemy import Column, Integer, String, Text, DateTime, Date, ForeignKey
+from sqlalchemy import Column, Integer, String, Text, DateTime, Date, ForeignKey, JSON
 from sqlalchemy.orm import relationship, backref
 from sqlalchemy.sql import func
 from app.core.database import Base
@@ -113,6 +113,11 @@ class SqmQualityIssue(Base):
     responsible = Column(String(64), nullable=True, comment="问题责任人 / 处理跟进人")
     occurred_date = Column(Date, nullable=True, comment="异常发生/发现日期")
     closed_date = Column(Date, nullable=True, comment="闭环解决归档日期")
+    defect_qty = Column(Integer, nullable=False, default=1, comment="不合格品数量")
+    batch_qty = Column(Integer, nullable=True, comment="批次/送检数量")
+    project_code = Column(String(64), nullable=True, index=True, comment="项目号")
+    mrb_no = Column(String(64), nullable=True, index=True, comment="MRB流水号")
+    attachments = Column(JSON, nullable=True, comment="缺陷照片/附件列表")
     remark = Column(Text, nullable=True, comment="备忘与追溯说明")
     created_at = Column(DateTime, server_default=func.now(), nullable=False, comment="创建时间")
     updated_at = Column(

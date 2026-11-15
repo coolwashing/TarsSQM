@@ -9,6 +9,9 @@
       import-key="project"
       import-title="新产品项目"
       unique-key="project_code"
+      show-actions
+      entity-label="车型项目"
+      :row-label-key="(r: ProjectRow) => `${r.name} (${r.project_code})`"
       allow-quick-add
       quick-add-placeholder="快速登记新产品项目..."
       :quick-add-defaults="{ status: '开发中' }"
@@ -17,6 +20,8 @@
       @size-change="handleSizeChange"
       @cell-change="handleCellChange"
       @quick-add="handleQuickAdd"
+      @edit="handleEdit"
+      @delete="handleDelete"
     >
       <!-- 顶部检索插槽 -->
       <template #search>
@@ -63,26 +68,6 @@
       </template>
 
 
-      <!-- 操作列 -->
-      <template #action="{ row }">
-        <el-button link type="primary" :icon="Edit" @click="handleEdit(row)">
-          编辑
-        </el-button>
-        <el-popconfirm
-          title="确认删除该产品项目主数据？"
-          confirm-button-text="删除"
-          cancel-button-text="取消"
-          confirm-button-type="danger"
-          @confirm="handleDelete(row)"
-        >
-          <template #reference>
-            <el-button link type="danger" :icon="Delete">
-              删除
-            </el-button>
-          </template>
-        </el-popconfirm>
-      </template>
-
       <!-- 空状态 -->
       <template #empty>
         <el-empty description="未检索到符合条件的新产品项目数据">
@@ -100,11 +85,11 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
-import { Search, Refresh, Plus, Edit, Delete, Calendar } from '@element-plus/icons-vue'
+import { Search, Refresh, Plus } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import axios from 'axios'
 import DataTable from '@/components/common/DataTable/index.vue'
-import type { TableColumn, CellChangeEvent } from '@/components/common/DataTable/types'
+import { getStoredTablePageSize, type TableColumn, type CellChangeEvent } from '@/components/common/DataTable/types'
 import ProjectForm from './ProjectForm.vue'
 
 interface ProjectRow {
@@ -128,20 +113,9 @@ const filters = reactive({
   status: 'ALL'
 })
 
-const getStoredPageSize = () => {
-  try {
-    const saved = localStorage.getItem('sqm_table_pagesize_project_list')
-    if (saved) {
-      const num = parseInt(saved, 10)
-      if (num && !isNaN(num)) return num
-    }
-  } catch {}
-  return 10
-}
-
 const pagination = reactive({
   page: 1,
-  pageSize: getStoredPageSize(),
+  pageSize: getStoredTablePageSize('project_list', 10),
   total: 0
 })
 

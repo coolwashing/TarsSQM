@@ -65,6 +65,14 @@
           </el-menu-item>
         </el-sub-menu>
 
+        <!-- FMEA 视觉风险画板与防错经验库 -->
+        <el-menu-item index="/fmea/workspace">
+          <el-icon><Connection /></el-icon>
+          <template #title>
+            <span class="menu-title">FMEA 风险画板</span>
+          </template>
+        </el-menu-item>
+
         <!-- 质量知识库 / 飞书文档规范 -->
         <el-menu-item index="/kb/docs">
           <el-icon><Notebook /></el-icon>
@@ -123,6 +131,7 @@ import {
   WarningFilled,
   Aim,
   List,
+  Connection,
   Notebook,
   Coin,
   Calendar,
@@ -140,6 +149,8 @@ watch(
   (newPath) => {
     if (newPath.startsWith('/kb')) {
       localStorage.setItem('sqm_last_kb_route', newPath)
+    } else if (newPath.startsWith('/fmea')) {
+      localStorage.setItem('sqm_last_fmea_route', newPath)
     } else if (newPath.startsWith('/dev/database')) {
       localStorage.setItem('sqm_last_db_route', newPath)
     }
@@ -149,12 +160,18 @@ watch(
 
 const activeRoute = computed(() => {
   if (route.path.startsWith('/kb')) return '/kb/docs'
+  if (route.path.startsWith('/fmea')) return '/fmea/workspace'
   return route.path
 })
 
 const handleMenuSelect = (index: string) => {
   if (index === '/kb/docs') {
     const target = localStorage.getItem('sqm_last_kb_route') || '/kb/docs'
+    router.push(target)
+    return
+  }
+  if (index === '/fmea/workspace') {
+    const target = localStorage.getItem('sqm_last_fmea_route') || '/fmea/workspace'
     router.push(target)
     return
   }

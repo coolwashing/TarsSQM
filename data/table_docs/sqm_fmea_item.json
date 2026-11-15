@@ -1,0 +1,12 @@
+{
+  "table_name": "sqm_fmea_item",
+  "title": "sqm_fmea_item 架构设计规范",
+  "business_module": "sqm_fmea",
+  "description": "FMEA 失效机理与防错经验主表（三视图同源 + 共用件本体经验池 + 双态软关联）",
+  "author": "系统架构师",
+  "version": "1.1.0",
+  "updated_at": "2026-11-08 10:25:00",
+  "html_content": "<h2>1. 业务定位与核心场景</h2>\n<p><strong>sqm_fmea_item</strong> 同源驱动画板右侧悬浮机理卡、失效实拍图鉴墙与全局 DataTable 台账。通过 <code>target_kind = 'shared_unit'</code> 支持跨多父级画板共享同一共用零件的本体固有 FMEA 经验；通过 <code>linked_refs</code> 实现零物理外键阻塞的双态软关联。</p>",
+  "markdown_content": "# sqm_fmea_item 架构设计规范\n\n同源驱动画板、图鉴与台账，支持共用件本体经验与双态软关联。\n"
+}
+

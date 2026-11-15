@@ -1,5 +1,5 @@
 <template>
-  <div class="common-data-table-container">
+  <div ref="containerRef" class="common-data-table-container">
     <!-- 统一综合顶栏 (将【信标1】操作区 与 【信标2】检索区 融合在同一紧凑卡片内) -->
     <div v-if="$slots.toolbar || $slots.search || importKey" class="table-unified-header-bar">
       <!-- 左侧区域：业务操作动作 (如“新建供应商”) + 业务搜索过滤项 -->
@@ -152,6 +152,7 @@
           ref="tableRef"
           v-loading="loading"
           :data="data"
+          :row-key="resolveElRowKey"
           height="100%"
           border
           stripe
@@ -259,7 +260,7 @@
                           </el-tag>
                           <span v-else class="feishu-placeholder-text">选择...</span>
                           <span
-                            v-if="cellFeedbackMap[`${scope.row.id ?? scope.row.code}_${col.prop}`]"
+                            v-if="cellFeedbackMap[getCellKey(scope.row, col.prop)]"
                             class="cell-status-dot saved"
                             title="已自动保存"
                           />
@@ -359,7 +360,7 @@
                           </template>
                           <span v-else class="feishu-placeholder-text">多选...</span>
                           <span
-                            v-if="cellFeedbackMap[`${scope.row.id ?? scope.row.code}_${col.prop}`]"
+                            v-if="cellFeedbackMap[getCellKey(scope.row, col.prop)]"
                             class="cell-status-dot saved"
                             title="已自动保存"
                           />
@@ -417,7 +418,122 @@
                     />
                   </div>
 
-                  <!-- C. 文本 / 数值行内直接编辑 (单击聚焦蓝框、回车/双击就地打字、Tab 跳转) -->
+                  <!-- C. 附件/图片列 (支持 28px 微缩略图、点击大图、Ctrl+V 截图粘贴、拖拽投放，行高严格 40px) -->
+                  <div
+                    v-else-if="col.dataType === 'image' || col.dataType === 'attachment'"
+                    class="feishu-cell-container is-attachment"
+                    :class="{
+                      'is-focused': isCellFocused(scope.row, col.prop),
+                      'is-autofill-range': isInAutofillRange(scope.$index, col.prop)
+                    }"
+                    :data-row-idx="scope.$index"
+                    tabindex="0"
+                    @click="focusCell(scope.row, col)"
+                    @paste="handleCellPasteImage($event, scope.row, col)"
+                    @dragover.prevent="onAttachmentDragOver($event)"
+                    @dragleave.prevent="onAttachmentDragLeave($event)"
+                    @drop.prevent="handleCellDropImage($event, scope.row, col)"
+                    @keydown="handleCellKeydown($event, scope.row, col, scope.$index)"
+                  >
+                    <div class="attachment-cell-inner">
+                      <!-- 已有图片缩略图列表 -->
+                      <template v-if="getAttachmentList(scope.row[col.prop]).length > 0">
+                        <div class="thumb-strip">
+                          <div
+                            v-for="(imgUrl, imgIdx) in getAttachmentList(scope.row[col.prop]).slice(0, 2)"
+                            :key="imgIdx"
+                            class="micro-thumb-wrapper"
+                            title="点击查看大图"
+                            @click.stop="openImageViewer(getAttachmentList(scope.row[col.prop]), imgIdx)"
+                          >
+                            <img :src="imgUrl" class="micro-thumb" alt="附件缩略图" />
+                          </div>
+                          <!-- 超过2张时的数字胶囊 -->
+                          <span
+                            v-if="getAttachmentList(scope.row[col.prop]).length > 2"
+                            class="more-count-badge"
+                            title="查看更多附件"
+                            @click.stop="openImageViewer(getAttachmentList(scope.row[col.prop]), 2)"
+                          >
+                            +{{ getAttachmentList(scope.row[col.prop]).length - 2 }}
+                          </span>
+                        </div>
+                      </template>
+
+                      <!-- 空状态微提示 (提示用户可直接 Ctrl+V 粘贴截图或拖入) -->
+                      <div v-else-if="col.editable" class="empty-attachment-placeholder" title="点击后按 Ctrl+V 粘贴截图，或将图片拖入此格">
+                        <el-icon class="upload-icon"><Paperclip /></el-icon>
+                        <span class="placeholder-tip">贴图/拖入</span>
+                      </div>
+                      <span v-else class="text-muted">-</span>
+
+                      <!-- 上传中的微型进度动效 -->
+                      <div v-if="attachmentUploadingKey === getCellKey(scope.row, col.prop)" class="uploading-mask">
+                        <el-icon class="is-loading"><Loading /></el-icon>
+                      </div>
+
+                      <!-- 微状态保存闪光 -->
+                      <span
+                        v-if="cellFeedbackMap[getCellKey(scope.row, col.prop)]"
+                        class="cell-status-dot saved"
+                        title="已自动保存"
+                      />
+                    </div>
+                  </div>
+
+                  <!-- D. 日期 / 时间行内选择器 (editType === 'date'，单击直开日历、选定即存) -->
+                  <div
+                    v-else-if="col.editType === 'date'"
+                    class="feishu-cell-container is-date"
+                    :class="{
+                      'is-focused': isCellFocused(scope.row, col.prop),
+                      'is-editing': isCellEditing(scope.row, col.prop),
+                      'is-autofill-range': isInAutofillRange(scope.$index, col.prop)
+                    }"
+                    :data-row-idx="scope.$index"
+                    tabindex="0"
+                    @click="startCellEdit(scope.row, col)"
+                    @keydown="handleCellKeydown($event, scope.row, col, scope.$index)"
+                  >
+                    <div v-if="isCellEditing(scope.row, col.prop)" class="feishu-input-wrap is-date-wrap" @click.stop>
+                      <el-date-picker
+                        ref="cellInputRef"
+                        v-model="editingCell!.tempValue"
+                        :type="isDateTimeColumn(col) ? 'datetime' : 'date'"
+                        :value-format="isDateTimeColumn(col) ? 'YYYY-MM-DD HH:mm:ss' : 'YYYY-MM-DD'"
+                        :format="col.dateFormat && col.dateFormat !== 'relative' ? col.dateFormat : (isDateTimeColumn(col) ? 'YYYY-MM-DD HH:mm:ss' : 'YYYY-MM-DD')"
+                        size="small"
+                        clearable
+                        placeholder="选择日期"
+                        class="feishu-edit-date"
+                        @change="saveCellEdit(scope.row, col)"
+                        @visible-change="(vis: boolean) => onDatePickerVisibleChange(vis, scope.row, col)"
+                      />
+                    </div>
+
+                    <div v-else class="feishu-text-display">
+                      <span class="cell-text-val" :class="{ 'is-empty-date': !scope.row[col.prop] }">
+                        {{ formatCellValue(scope.row, col) }}
+                      </span>
+                      <el-icon class="cell-hover-edit-icon"><Calendar /></el-icon>
+                      <span
+                        v-if="cellFeedbackMap[getCellKey(scope.row, col.prop)]"
+                        class="cell-status-dot saved"
+                        title="已自动保存"
+                      />
+                    </div>
+
+                    <div
+                      v-if="isCellFocused(scope.row, col.prop) && !isCellEditing(scope.row, col.prop)"
+                      class="feishu-autofill-handle"
+                      title="拖拽复制填充（支持向上或向下）"
+                      @mouseenter="onHandleHover"
+                      @mousedown.stop.prevent="startAutofillDrag($event, scope.row, col, scope.$index)"
+                      @click.stop.prevent
+                    />
+                  </div>
+
+                  <!-- E. 文本 / 数值行内直接编辑 (单击直接编辑打字、Tab 跳转) -->
                   <div
                     v-else
                     class="feishu-cell-container is-text"
@@ -428,8 +544,7 @@
                     }"
                     :data-row-idx="scope.$index"
                     tabindex="0"
-                    @click="focusCell(scope.row, col)"
-                    @dblclick="startCellEdit(scope.row, col)"
+                    @click="startCellEdit(scope.row, col)"
                     @keydown="handleCellKeydown($event, scope.row, col, scope.$index)"
                   >
                     <!-- 编辑态控件 -->
@@ -462,7 +577,7 @@
                       <span class="cell-text-val">{{ formatCellValue(scope.row, col) }}</span>
                       <el-icon class="cell-hover-edit-icon"><Edit /></el-icon>
                       <span
-                        v-if="cellFeedbackMap[`${scope.row.id ?? scope.row.code}_${col.prop}`]"
+                        v-if="cellFeedbackMap[getCellKey(scope.row, col.prop)]"
                         class="cell-status-dot saved"
                         title="已自动保存"
                       />
@@ -482,8 +597,30 @@
 
                 <!-- 3. 普通非编辑列展示态 (支持代码徽标、彩色状态标签与日期0.5s悬浮) -->
                 <template v-else>
-                  <!-- A. 代码/图号徽标 (dataType === 'code') -->
-                  <span v-if="col.dataType === 'code'" class="feishu-code-badge">
+                  <!-- A. 附件/图片展示 (微缩略图，行高严格 40px) -->
+                  <div v-if="col.dataType === 'image' || col.dataType === 'attachment'" class="thumb-strip">
+                    <div
+                      v-for="(imgUrl, imgIdx) in getAttachmentList(scope.row[col.prop]).slice(0, 2)"
+                      :key="imgIdx"
+                      class="micro-thumb-wrapper"
+                      title="点击查看大图"
+                      @click.stop="openImageViewer(getAttachmentList(scope.row[col.prop]), imgIdx)"
+                    >
+                      <img :src="imgUrl" class="micro-thumb" alt="附件缩略图" />
+                    </div>
+                    <span
+                      v-if="getAttachmentList(scope.row[col.prop]).length > 2"
+                      class="more-count-badge"
+                      title="查看更多附件"
+                      @click.stop="openImageViewer(getAttachmentList(scope.row[col.prop]), 2)"
+                    >
+                      +{{ getAttachmentList(scope.row[col.prop]).length - 2 }}
+                    </span>
+                    <span v-if="getAttachmentList(scope.row[col.prop]).length === 0" class="text-muted">-</span>
+                  </div>
+
+                  <!-- B. 代码/图号徽标 (dataType === 'code') -->
+                  <span v-else-if="col.dataType === 'code'" class="feishu-code-badge">
                     {{ scope.row[col.prop] || '-' }}
                   </span>
 
@@ -515,16 +652,42 @@
             </el-table-column>
           </template>
 
-          <!-- 操作列插槽 -->
+          <!-- 统一标准操作列（内置配置驱动 + #action-prefix 前置扩展 + #action 逃生舱覆盖） -->
           <el-table-column
-            v-if="$slots.action"
+            v-if="$slots.action || showActions"
             label="操作"
-            :width="actionWidth || 140"
+            :width="resolvedActionWidth"
             :fixed="actionFixed || 'right'"
             align="center"
+            class-name="dt-action-column"
           >
             <template #default="scope">
-              <slot name="action" v-bind="scope" />
+              <slot v-if="$slots.action" name="action" v-bind="scope" />
+              <div v-else class="dt-row-actions">
+                <slot name="action-prefix" v-bind="scope" />
+                <el-button
+                  v-if="isRowActionAllowed(canEdit, scope.row)"
+                  link
+                  type="primary"
+                  size="small"
+                  :icon="Edit"
+                  class="dt-action-btn"
+                  @click.stop="emit('edit', scope.row)"
+                >
+                  编辑
+                </el-button>
+                <el-button
+                  v-if="isRowActionAllowed(canDelete, scope.row)"
+                  link
+                  type="danger"
+                  size="small"
+                  :icon="Delete"
+                  class="dt-action-btn"
+                  @click.stop="handleBuiltInDelete(scope.row)"
+                >
+                  删除
+                </el-button>
+              </div>
             </template>
           </el-table-column>
 
@@ -708,15 +871,23 @@
       :column="selectedColForConfig"
       @save="handleColumnConfigSave"
     />
+
+    <!-- 全屏图片大图查看器 -->
+    <el-image-viewer
+      v-if="imageViewerVisible"
+      :url-list="imageViewerUrls"
+      :initial-index="imageViewerIndex"
+      @close="imageViewerVisible = false"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
-import { Refresh, Operation, Top, Bottom, Upload, Download, Edit, Search, Check, Plus, Setting, MagicStick, RefreshLeft, RefreshRight } from '@element-plus/icons-vue'
+import { ref, reactive, computed, watch, onMounted, onUnmounted, onActivated, onDeactivated, nextTick, useSlots, getCurrentInstance } from 'vue'
+import { Refresh, Operation, Top, Bottom, Upload, Download, Edit, Delete, Calendar, Search, Check, Plus, Setting, MagicStick, RefreshLeft, RefreshRight, Paperclip, Loading } from '@element-plus/icons-vue'
 import axios from 'axios'
-import { ElMessage } from 'element-plus'
-import type { TableColumn, TablePagination, CellChangeEvent, BatchCellChangeEvent, TableOptionItem, HistoryCommand } from './types'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { TABLE_PAGESIZE_PREFIX, type TableColumn, type TablePagination, type CellChangeEvent, type BatchCellChangeEvent, type TableOptionItem, type HistoryCommand } from './types'
 import ExcelImportDialog from '@/components/common/ExcelImportDialog/index.vue'
 import AiSmartImportDialog from '@/components/common/AiSmartImportDialog/index.vue'
 import ColumnConfigDialog from './components/ColumnConfigDialog.vue'
@@ -729,6 +900,12 @@ const props = withDefaults(
     loading?: boolean
     pagination?: TablePagination
     storageKey?: string
+    rowKey?: string | ((row: any) => string | number)
+    showActions?: boolean
+    entityLabel?: string
+    rowLabelKey?: string | ((row: any) => string)
+    canEdit?: boolean | ((row: any) => boolean)
+    canDelete?: boolean | ((row: any) => boolean)
     actionWidth?: number | string
     actionFixed?: boolean | 'left' | 'right'
     emptyText?: string
@@ -744,13 +921,17 @@ const props = withDefaults(
   {
     loading: false,
     storageKey: '',
-    actionWidth: 140,
+    rowKey: 'id',
+    showActions: false,
+    entityLabel: '',
+    canEdit: true,
+    canDelete: true,
     actionFixed: 'right',
     emptyText: '未检索到符合条件的数据记录',
     importKey: '',
     importTitle: '',
     uniqueKey: '',
-    showSelection: true,
+    showSelection: false,
     showIndex: true,
     allowQuickAdd: false,
     quickAddPlaceholder: '添加新记录'
@@ -766,10 +947,103 @@ const emit = defineEmits<{
   (e: 'batch-cell-change', payload: BatchCellChangeEvent): void
   (e: 'selection-change', selection: any[]): void
   (e: 'quick-add', payload: Record<string, any>, done: () => void): void
+  (e: 'edit', row: any): void
+  (e: 'delete', row: any): void
 }>()
 
+const slots = useSlots()
+const vmInstance = getCurrentInstance()
+const containerRef = ref<HTMLElement | null>(null)
 const tableRef = ref<any>(null)
 const cellInputRef = ref<any>(null)
+
+// ========================================================
+// 稳定行主键推导引擎 (解决无 id/code 字典表或动态主键表状态串行问题)
+// ========================================================
+const anonymousRowUidMap = new WeakMap<object, string>()
+let anonymousRowUidSeq = 0
+
+const getRowIdentity = (row: any): string | number => {
+  if (!row || typeof row !== 'object') return String(row ?? '')
+  if (typeof props.rowKey === 'function') {
+    const k = props.rowKey(row)
+    if (k !== undefined && k !== null && k !== '') return k
+  } else if (props.rowKey && row[props.rowKey] !== undefined && row[props.rowKey] !== null && row[props.rowKey] !== '') {
+    return row[props.rowKey]
+  }
+  const fallback = row.id ?? row.code ?? row.part_no ?? row.issue_no ?? row.project_code ?? row.task_code ?? row.column_name
+  if (fallback !== undefined && fallback !== null && fallback !== '') return fallback
+
+  let anon = anonymousRowUidMap.get(row)
+  if (!anon) {
+    anonymousRowUidSeq += 1
+    anon = `_dt_row_${anonymousRowUidSeq}`
+    anonymousRowUidMap.set(row, anon)
+  }
+  return anon
+}
+
+const resolveElRowKey = (row: any): string => String(getRowIdentity(row))
+
+// ========================================================
+// 统一标准操作列控制与高危删除二次确认 (符合 ui-ux.md 规范)
+// ========================================================
+const resolvedActionWidth = computed(() => {
+  if (props.actionWidth) return props.actionWidth
+  if (slots['action-prefix']) return 168
+  return 120
+})
+
+const isRowActionAllowed = (rule: boolean | ((row: any) => boolean) | undefined, row: any): boolean => {
+  if (typeof rule === 'function') return rule(row)
+  return rule !== false
+}
+
+const resolveRowDisplayLabel = (row: any): string => {
+  if (!row) return ''
+  if (typeof props.rowLabelKey === 'function') {
+    return (props.rowLabelKey(row) || '').trim()
+  }
+  if (typeof props.rowLabelKey === 'string' && props.rowLabelKey) {
+    const val = row[props.rowLabelKey]
+    if (val !== undefined && val !== null && String(val).trim() !== '') {
+      return String(val).trim()
+    }
+  }
+  const candidate =
+    row.name ||
+    row.title ||
+    row.feature_name ||
+    row.issue_no ||
+    row.part_no ||
+    row.project_code ||
+    row.task_code ||
+    row.code ||
+    row.id
+  return candidate !== undefined && candidate !== null ? String(candidate).trim() : ''
+}
+
+const handleBuiltInDelete = (row: any) => {
+  const targetLabel = resolveRowDisplayLabel(row)
+  const noun = props.entityLabel ? props.entityLabel.trim() : '记录'
+  const targetDisplay = targetLabel ? `【${targetLabel}】` : ''
+  ElMessageBox.confirm(
+    `确定要删除${noun}${targetDisplay}吗？此操作不可恢复。`,
+    '删除确认',
+    {
+      confirmButtonText: '确定删除',
+      cancelButtonText: '取消',
+      confirmButtonClass: 'el-button--danger',
+      type: 'warning'
+    }
+  )
+    .then(() => {
+      emit('delete', row)
+    })
+    .catch(() => {
+      // 用户取消，静默处理
+    })
+}
 
 // ========================================================
 // 飞书多维表格风格：通用行底极速连续加行引擎 (Quick Add Row)
@@ -899,8 +1173,7 @@ const undo = () => {
       value: item.oldValue,
       oldValue: item.newValue
     })
-    const rowKey = item.row.id ?? item.row.code
-    const key = `${rowKey}_${item.prop}`
+    const key = getCellKey(item.row, item.prop)
     cellFeedbackMap.value[key] = 'saved'
   })
 
@@ -909,8 +1182,7 @@ const undo = () => {
 
   setTimeout(() => {
     cmd.items.forEach(item => {
-      const rowKey = item.row.id ?? item.row.code
-      delete cellFeedbackMap.value[`${rowKey}_${item.prop}`]
+      delete cellFeedbackMap.value[getCellKey(item.row, item.prop)]
     })
   }, 1800)
 }
@@ -928,8 +1200,7 @@ const redo = () => {
       value: item.newValue,
       oldValue: item.oldValue
     })
-    const rowKey = item.row.id ?? item.row.code
-    const key = `${rowKey}_${item.prop}`
+    const key = getCellKey(item.row, item.prop)
     cellFeedbackMap.value[key] = 'saved'
   })
 
@@ -938,16 +1209,21 @@ const redo = () => {
 
   setTimeout(() => {
     cmd.items.forEach(item => {
-      const rowKey = item.row.id ?? item.row.code
-      delete cellFeedbackMap.value[`${rowKey}_${item.prop}`]
+      delete cellFeedbackMap.value[getCellKey(item.row, item.prop)]
     })
   }, 1800)
 }
 
 const handleTableUndoRedoKeydown = (e: KeyboardEvent) => {
-  // 如果用户正在原生输入框打字编辑中，由浏览器原生 input 处理
-  const targetTag = (e.target as HTMLElement)?.tagName
-  if (targetTag === 'INPUT' || targetTag === 'TEXTAREA') {
+  // 仅当当前表格容器在视口中真实可见时响应（防止 keep-alive 后台页或隐藏 Tab 误触发）
+  if (!containerRef.value || containerRef.value.offsetParent === null) {
+    return
+  }
+
+  // 如果用户正在原生输入框或可编辑富文本中打字，由原生输入控件处理
+  const targetEl = e.target as HTMLElement | null
+  const targetTag = targetEl?.tagName
+  if (targetTag === 'INPUT' || targetTag === 'TEXTAREA' || targetEl?.isContentEditable) {
     return
   }
 
@@ -1009,9 +1285,10 @@ const onRefresh = () => {
   emit('refresh')
 }
 
-// 列持久化配置
+// 列持久化配置（白名单合并：仅还原用户可变偏好，避免旧缓存覆盖代码新增枚举/标签）
 interface ManagedColumn extends TableColumn {
   visible?: boolean
+  _userCustomized?: boolean
 }
 
 const managedColumns = ref<ManagedColumn[]>([])
@@ -1028,13 +1305,27 @@ const initColumns = () => {
         parsed.forEach(p => {
           const original = props.columns.find(c => c.prop === p.prop)
           if (original) {
-            orderedCols.push({
-              ...original,
-              ...p,
-              visible: p.visible ?? true,
-              width: p.width ?? original.width,
-              dateFormat: p.dateFormat ?? original.dateFormat
-            })
+            if (p._userCustomized) {
+              orderedCols.push({
+                ...original,
+                label: p.label ?? original.label,
+                editType: p.editType ?? original.editType,
+                options: p.options ?? original.options,
+                colorMap: p.colorMap ?? original.colorMap,
+                allowCreate: p.allowCreate ?? original.allowCreate,
+                visible: p.visible ?? original.visible ?? true,
+                width: p.width ?? original.width,
+                dateFormat: p.dateFormat ?? original.dateFormat,
+                _userCustomized: true
+              })
+            } else {
+              orderedCols.push({
+                ...original,
+                visible: p.visible ?? original.visible ?? true,
+                width: p.width ?? original.width,
+                dateFormat: p.dateFormat ?? original.dateFormat
+              })
+            }
           }
         })
 
@@ -1065,17 +1356,23 @@ const visibleColumns = computed(() => {
 const saveColumnSettings = () => {
   if (!props.storageKey) return
   try {
-    const serialized = managedColumns.value.map(c => ({
-      prop: c.prop,
-      visible: c.visible,
-      width: c.width,
-      label: c.label,
-      editType: c.editType,
-      dateFormat: c.dateFormat,
-      options: c.options,
-      colorMap: c.colorMap,
-      allowCreate: c.allowCreate
-    }))
+    const serialized = managedColumns.value.map(c => {
+      const base: Record<string, any> = {
+        prop: c.prop,
+        visible: c.visible,
+        width: c.width,
+        dateFormat: c.dateFormat
+      }
+      if (c._userCustomized) {
+        base._userCustomized = true
+        base.label = c.label
+        base.editType = c.editType
+        base.options = c.options
+        base.colorMap = c.colorMap
+        base.allowCreate = c.allowCreate
+      }
+      return base
+    })
     localStorage.setItem(`sqm_table_cols_${props.storageKey}`, JSON.stringify(serialized))
   } catch {
     // 忽略
@@ -1121,6 +1418,12 @@ const defaultTooltipOptions = {
 const isDateColumn = (col: TableColumn) => {
   if (col.dataType === 'date' || col.dataType === 'datetime' || col.editType === 'date') return true
   if (col.prop.endsWith('_at') || col.prop.endsWith('_date') || col.prop === 'sop_date') return true
+  return false
+}
+
+const isDateTimeColumn = (col: TableColumn) => {
+  if (col.dataType === 'datetime') return true
+  if (col.dateFormat && col.dateFormat.includes('HH')) return true
   return false
 }
 
@@ -1177,7 +1480,7 @@ const editingCell = ref<{ rowId: any; prop: string; tempValue: any } | null>(nul
 const activeSelectPopoverKey = ref<string | null>(null)
 
 const getCellKey = (row: any, prop: string) => {
-  return `${row.id ?? row.code}_${prop}`
+  return `${getRowIdentity(row)}_${prop}`
 }
 
 const toggleSelectPopover = (row: any, col: TableColumn) => {
@@ -1291,34 +1594,173 @@ const isMultiSelected = (currentVal: any, optVal: any): boolean => {
 // 聚焦与编辑态判断
 const isCellFocused = (row: any, prop: string) => {
   if (!focusedCell.value) return false
-  const rowKey = row.id ?? row.code
+  const rowKey = getRowIdentity(row)
   return focusedCell.value.rowId === rowKey && focusedCell.value.prop === prop
 }
 
 const isCellEditing = (row: any, prop: string) => {
   if (!editingCell.value) return false
-  const rowKey = row.id ?? row.code
+  const rowKey = getRowIdentity(row)
   return editingCell.value.rowId === rowKey && editingCell.value.prop === prop
 }
 
 const focusCell = (row: any, col: TableColumn) => {
-  const rowKey = row.id ?? row.code
+  const rowKey = getRowIdentity(row)
   focusedCell.value = { rowId: rowKey, prop: col.prop }
 }
 
 const startCellEdit = (row: any, col: TableColumn) => {
-  if (!col.editable) return
-  const rowKey = row.id ?? row.code
+  if (!col.editable) {
+    focusCell(row, col)
+    return
+  }
+  const rowKey = getRowIdentity(row)
   focusedCell.value = { rowId: rowKey, prop: col.prop }
   editingCell.value = {
     rowId: rowKey,
     prop: col.prop,
-    tempValue: row[col.prop]
+    tempValue: row[col.prop] ?? (col.editType === 'date' ? '' : row[col.prop])
   }
   nextTick(() => {
     cellInputRef.value?.focus?.()
+    if (col.editType === 'date') {
+      cellInputRef.value?.handleOpen?.()
+      return
+    }
+    try {
+      const inputEl = (cellInputRef.value as any)?.input || (cellInputRef.value as any)?.$el?.querySelector('input')
+      inputEl?.select?.()
+    } catch {
+      // ignore
+    }
   })
 }
+
+const onDatePickerVisibleChange = (vis: boolean, row: any, col: TableColumn) => {
+  if (!vis && isCellEditing(row, col.prop)) {
+    saveCellEdit(row, col)
+  }
+}
+
+// ========================================================
+// 飞书风格：通用附件与图片列处理引擎 (Attachment & Image Field)
+// ========================================================
+const imageViewerVisible = ref(false)
+const imageViewerUrls = ref<string[]>([])
+const imageViewerIndex = ref(0)
+const attachmentUploadingKey = ref<string | null>(null)
+
+const getAttachmentList = (raw: any): string[] => {
+  if (!raw) return []
+  if (Array.isArray(raw)) {
+    return raw.map(item => (typeof item === 'string' ? item : item?.url || '')).filter(Boolean)
+  }
+  if (typeof raw === 'string') {
+    const trimmed = raw.trim()
+    if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+      try {
+        const parsed = JSON.parse(trimmed)
+        return Array.isArray(parsed) ? parsed.map(item => (typeof item === 'string' ? item : item?.url || '')).filter(Boolean) : []
+      } catch {
+        return [trimmed]
+      }
+    }
+    if (trimmed.includes(',')) {
+      return trimmed.split(',').map(s => s.trim()).filter(Boolean)
+    }
+    return [trimmed]
+  }
+  return []
+}
+
+const openImageViewer = (urls: string[], index = 0) => {
+  imageViewerUrls.value = urls
+  imageViewerIndex.value = index
+  imageViewerVisible.value = true
+}
+
+const uploadAttachmentFile = async (file: File): Promise<string | null> => {
+  const formData = new FormData()
+  formData.append('file', file)
+  formData.append('biz_type', props.importKey || props.storageKey || 'table_attachment')
+  try {
+    const res = await axios.post('/api/storage/upload', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    })
+    return res.data?.url || null
+  } catch (err: any) {
+    ElMessage.error(`图片上传失败: ${err.response?.data?.detail || err.message}`)
+    return null
+  }
+}
+
+const handleCellPasteImage = async (e: ClipboardEvent, row: any, col: TableColumn) => {
+  if (!col.editable) return
+  const items = e.clipboardData?.items
+  if (!items) return
+  const imageFiles: File[] = []
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i]
+    if (item.type.startsWith('image/')) {
+      const file = item.getAsFile()
+      if (file) imageFiles.push(file)
+    }
+  }
+  if (imageFiles.length === 0) return
+  e.preventDefault()
+  e.stopPropagation()
+
+  attachmentUploadingKey.value = getCellKey(row, col.prop)
+
+  try {
+    const currentList = [...getAttachmentList(row[col.prop])]
+    for (const f of imageFiles) {
+      const url = await uploadAttachmentFile(f)
+      if (url) currentList.push(url)
+    }
+    const oldVal = row[col.prop]
+    row[col.prop] = currentList
+    emitCellChange(row, col.prop, currentList, oldVal)
+  } finally {
+    attachmentUploadingKey.value = null
+  }
+}
+
+const handleCellDropImage = async (e: DragEvent, row: any, col: TableColumn) => {
+  if (!col.editable) return
+  const files = e.dataTransfer?.files
+  if (!files || files.length === 0) return
+  const imageFiles: File[] = []
+  for (let i = 0; i < files.length; i++) {
+    const file = files[i]
+    if (file.type.startsWith('image/')) {
+      imageFiles.push(file)
+    }
+  }
+  if (imageFiles.length === 0) return
+  e.preventDefault()
+  e.stopPropagation()
+
+  attachmentUploadingKey.value = getCellKey(row, col.prop)
+
+  try {
+    const currentList = [...getAttachmentList(row[col.prop])]
+    for (const f of imageFiles) {
+      const url = await uploadAttachmentFile(f)
+      if (url) currentList.push(url)
+    }
+    const oldVal = row[col.prop]
+    row[col.prop] = currentList
+    emitCellChange(row, col.prop, currentList, oldVal)
+  } finally {
+    attachmentUploadingKey.value = null
+  }
+}
+
+const onAttachmentDragOver = (e: DragEvent) => {
+  e.dataTransfer!.dropEffect = 'copy'
+}
+const onAttachmentDragLeave = (_e: DragEvent) => {}
 
 // 触发自动保存事件与右上角微点反馈
 const emitCellChange = (row: any, prop: string, value: any, oldValue: any, record = true) => {
@@ -1330,8 +1772,7 @@ const emitCellChange = (row: any, prop: string, value: any, oldValue: any, recor
       items: [{ row, prop, oldValue, newValue: value }]
     })
   }
-  const rowKey = row.id ?? row.code
-  const key = `${rowKey}_${prop}`
+  const key = getCellKey(row, prop)
   cellFeedbackMap.value[key] = 'saved'
   setTimeout(() => {
     delete cellFeedbackMap.value[key]
@@ -1502,6 +1943,13 @@ const handleCellKeydown = (e: KeyboardEvent, row: any, col: TableColumn, rowIdx:
       editingCell.value = null
     }
   } else if (!isCellEditing(row, col.prop)) {
+    // 聚焦态下敲击常规字符直接进入编辑态 (盲打即打字，排除单选/多选/日期/附件列)
+    if (col.editable && e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey && e.key !== ' ' && col.editType !== 'select' && col.editType !== 'multi-select' && col.editType !== 'date' && col.dataType !== 'image' && col.dataType !== 'attachment') {
+      startCellEdit(row, col)
+      editingCell.value!.tempValue = e.key
+      e.preventDefault()
+      return
+    }
     // 聚焦态下的飞书四向方向键漫游
     if (e.key === 'ArrowDown') {
       e.preventDefault()
@@ -1615,8 +2063,7 @@ const onAutofillMouseUp = () => {
             value: sourceValue,
             oldValue
           })
-          const rowKey = targetRow.id ?? targetRow.code
-          const key = `${rowKey}_${col.prop}`
+          const key = getCellKey(targetRow, col.prop)
           cellFeedbackMap.value[key] = 'saved'
         }
       }
@@ -1637,23 +2084,25 @@ const onAutofillMouseUp = () => {
         }))
       })
 
-      // 触发批量更新事件
+      // 触发批量更新事件；若父组件未监听 @batch-cell-change，则向下兼容按序触发 @cell-change
+      const vnodeProps = vmInstance?.vnode.props || {}
+      const hasBatchListener = Boolean(vnodeProps.onBatchCellChange || vnodeProps['onBatch-cell-change'])
       emit('batch-cell-change', {
         prop: col.prop,
         value: sourceValue,
         items: batchItems
       })
-      // 同时按序触发单个 cell-change，保持向下兼容
-      batchItems.forEach(item => {
-        emit('cell-change', item)
-      })
+      if (!hasBatchListener) {
+        batchItems.forEach(item => {
+          emit('cell-change', item)
+        })
+      }
 
       ElMessage.success(`已${directionText}复制填充 ${batchItems.length} 行数据`)
 
       setTimeout(() => {
         batchItems.forEach(item => {
-          const rowKey = item.row.id ?? item.row.code
-          delete cellFeedbackMap.value[`${rowKey}_${col.prop}`]
+          delete cellFeedbackMap.value[getCellKey(item.row, col.prop)]
         })
       }, 1800)
     }
@@ -1665,12 +2114,29 @@ const onAutofillMouseUp = () => {
   autofillState.sourceValue = null
 }
 
-onUnmounted(() => {
+// ========================================================
+// 全局事件监听生命周期管理 (完美兼容 keep-alive 路由缓存，杜绝后台重复监听泄漏)
+// ========================================================
+let globalListenersBound = false
+
+const bindGlobalListeners = () => {
+  if (globalListenersBound) return
+  window.addEventListener('keydown', handleTableUndoRedoKeydown)
+  window.addEventListener('click', handleGlobalClick, true)
+  globalListenersBound = true
+}
+
+const unbindGlobalListeners = () => {
   window.removeEventListener('mousemove', onAutofillMouseMove)
   window.removeEventListener('mouseup', onAutofillMouseUp)
   window.removeEventListener('keydown', handleTableUndoRedoKeydown)
   window.removeEventListener('click', handleGlobalClick, true)
   document.body.classList.remove('is-table-autofilling')
+  globalListenersBound = false
+}
+
+onUnmounted(() => {
+  unbindGlobalListeners()
 })
 
 // ========================================================
@@ -1687,14 +2153,14 @@ const openColumnConfig = (col: TableColumn) => {
 const handleColumnConfigSave = (payload: { prop: string; changes: Partial<TableColumn> }) => {
   const target = managedColumns.value.find(c => c.prop === payload.prop)
   if (target) {
-    Object.assign(target, payload.changes)
+    Object.assign(target, payload.changes, { _userCustomized: true })
     saveColumnSettings()
   }
 }
 
 // 分页控制 (记住用户每页条数偏好)
 const PAGE_SIZE_KEY = computed(() => {
-  return props.storageKey ? `sqm_table_pagesize_${props.storageKey}` : `sqm_table_pagesize_default`
+  return props.storageKey ? `${TABLE_PAGESIZE_PREFIX}${props.storageKey}` : `${TABLE_PAGESIZE_PREFIX}default`
 })
 
 const initPageSize = () => {
@@ -1736,8 +2202,17 @@ watch(
 onMounted(() => {
   initColumns()
   initPageSize()
-  window.addEventListener('keydown', handleTableUndoRedoKeydown)
-  window.addEventListener('click', handleGlobalClick, true)
+  bindGlobalListeners()
+})
+
+onActivated(() => {
+  bindGlobalListeners()
+})
+
+onDeactivated(() => {
+  activeSelectPopoverKey.value = null
+  editingCell.value = null
+  unbindGlobalListeners()
 })
 
 const openAiImport = () => {
@@ -2255,6 +2730,47 @@ defineExpose({
 .feishu-status-tag {
   font-weight: 500;
 }
+
+/* ========================================================
+   统一标准操作列与行内日期选择器样式
+   ======================================================== */
+.custom-fit-table :deep(td.dt-action-column .cell) {
+  padding: 0 6px;
+}
+
+.dt-row-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  white-space: nowrap;
+  line-height: 1;
+}
+
+.dt-row-actions :deep(.el-button + .el-button) {
+  margin-left: 0;
+}
+
+.dt-action-btn {
+  padding: 2px 2px;
+  font-weight: 500;
+}
+
+.feishu-input-wrap.is-date-wrap {
+  width: 100%;
+}
+
+.feishu-input-wrap.is-date-wrap :deep(.el-date-editor) {
+  width: 100% !important;
+}
+
+.feishu-input-wrap.is-date-wrap :deep(.el-input__wrapper) {
+  padding: 0 6px;
+}
+
+.is-empty-date {
+  color: #94a3b8;
+}
 </style>
 
 <!-- 飞书式 Popover 浮层全局样式 (不加 scoped 以渗透至 teleport 弹出层) -->
@@ -2455,5 +2971,113 @@ defineExpose({
   color: #2563eb;
   background-color: #eff6ff;
   transform: rotate(45deg);
+}
+
+/* ========================================================
+   飞书多维表格风格：通用附件与微型缩略图样式 (行高严格40px)
+   ======================================================== */
+.feishu-cell-container.is-attachment {
+  height: 40px;
+  max-height: 40px;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  padding: 0 4px;
+}
+
+.attachment-cell-inner {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 100%;
+  width: 100%;
+  position: relative;
+}
+
+.thumb-strip {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 28px;
+  max-height: 28px;
+}
+
+.micro-thumb-wrapper {
+  width: 28px;
+  height: 28px;
+  border-radius: 4px;
+  overflow: hidden;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: transform 0.15s, border-color 0.15s;
+}
+
+.micro-thumb-wrapper:hover {
+  transform: scale(1.08);
+  border-color: #3b82f6;
+}
+
+.micro-thumb {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.more-count-badge {
+  font-size: 11px;
+  font-weight: 600;
+  color: #64748b;
+  background: #f1f5f9;
+  border-radius: 10px;
+  padding: 1px 5px;
+  cursor: pointer;
+  line-height: 16px;
+  border: 1px solid #e2e8f0;
+}
+
+.more-count-badge:hover {
+  background: #e2e8f0;
+  color: #1e293b;
+}
+
+.empty-attachment-placeholder {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  color: #94a3b8;
+  font-size: 12px;
+  cursor: pointer;
+  border: 1px dashed #cbd5e1;
+  border-radius: 4px;
+  padding: 2px 6px;
+  height: 26px;
+  box-sizing: border-box;
+  transition: all 0.15s ease;
+}
+
+.empty-attachment-placeholder:hover {
+  color: #3b82f6;
+  border-color: #3b82f6;
+  background: #eff6ff;
+}
+
+.empty-attachment-placeholder .upload-icon {
+  font-size: 13px;
+}
+
+.placeholder-tip {
+  font-size: 11px;
+}
+
+.uploading-mask {
+  position: absolute;
+  right: 4px;
+  display: flex;
+  align-items: center;
+  color: #3b82f6;
+  font-size: 14px;
 }
 </style>
